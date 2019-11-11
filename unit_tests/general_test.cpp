@@ -16,6 +16,6 @@ int main() {
 		std::cerr << "[ERROR] Failed with: " << ex.what();
 		return -1;
 	}
-	std::cout << "[INFO] Tests OK.";
+	std::cout << "[INFO] Tests OK." << std::endl;
 	return 0;
 }

@@ -84,8 +84,14 @@ private:
 
 	// forward iterator for free list
 	template <ordering_by i_order>
-	struct iterator
-	    : public std::iterator<std::bidirectional_iterator_tag, block_type> {
+	struct iterator {
+			
+		using iterator_category = std::bidirectional_iterator_tag;
+		using value_type = block_type;
+		using difference_type = std::ptrdiff_t;
+		using pointer = block_type*;
+		using reference = block_type&;
+
 		iterator(const iterator& i_other);
 		iterator(iterator&& i_other);
 
