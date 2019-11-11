@@ -1,30 +1,58 @@
 #pragma once
 
-#include <default_allocator.hpp>
 #include <detail/cppalloc_common.hpp>
+#include <default_allocator.hpp>
 
 namespace cppalloc {
 
 template <typename underlying_allocator =
-              cppalloc::aligned_allocator<k_alignment>,
+              cppalloc::default_allocator<false>,
           bool k_compute_stats = false>
-class pool_allocator : underlying_allocator {
+class pool_allocator : underlying_allocator, detail::statistics<k_compute_stats> {
 public:
-	struct statistics;
+
+	using statistics = detail::statistics<k_compute_stats>;
 	using size_type = typename underlying_allocator::size_type;
 	using address   = typename underlying_allocator::address;
 
-	pool_allocator(size_type i_atom_size, size_type i_atom_count)
-	    : k_arena_size(i_atom_size * i_atom_count), k_atom_count(i_atom_count) {}
+	template <typename...Args>
+	pool_allocator(size_type i_atom_size, size_type i_atom_count, Args&&...i_args)
+	    : k_atom_size(i_atom_size), k_atom_count(i_atom_count), underlying_allocator(std::forward<Args>(i_args)...) {}
 
 	pool_allocator(pool_allocator&& i_other);
-
+	
 	inline address allocate(size_type i_size) { 
-		size_type i_count = (i_size + k_atom_count - 1) / k_atom_count;
-		if (!solo || !arrays)
 
+		size_type i_count = (i_size + k_atom_size - 1) / k_atom_size;
+		if (i_count > k_atom_count)
+			return underlying_allocator::allocate(i_size);
+
+		auto measure = statistics::report_allocate(i_size);
+		if (i_count == 1) {
+			if (!solo) {
+				if (!arrays)
+					allocate_arena();
+				return consume(1);
+			}
+			return consume();
+		}		
+		else {
+			if (!arrays)
+				allocate_arena();
+			return consume(i_count);
+		}		
 	}
-	inline void    deallocate(address, size_type i_size);
+
+	inline void    deallocate(address i_ptr, size_type i_size) {
+		size_type i_count = (i_size + k_atom_size - 1) / k_atom_size;
+		if (i_count > k_atom_count)
+			underlying_allocator::deallocate(i_ptr);
+		auto measure = statistics::report_deallocate(i_size);
+		if (i_count == 1)
+			release(i_ptr);
+		else
+			release(i_ptr, i_count);
+	}
 
 private:
 	struct array_arena {
@@ -95,6 +123,40 @@ private:
 		};
 	};
 
+	struct arena_linker {
+		enum : size_type { k_header_size = sizeof(void*) };
+		
+		void link_with(array_arena arena, size_type size) {
+			void** loc = reinterpret_cast<void**>(arena.value + size);
+			*loc = first;
+			first = loc;
+		}
+
+		template <typename lambda>
+		void free_each(lambda&& i_deleter, size_t size) {
+			size_type real_size = size + k_header_size;
+			while (first) {
+				void* next = *reinterpret_cast<void**>(first);
+				i_deleter(reinterpret_cast<address>(reinterpret_cast<std::uintptr_t>(first) - size), real_size);
+				first = next;
+			}
+			
+		}
+
+		void* first = nullptr;
+	};
+
+public:
+	~pool_allocator() {
+		size_type size = k_atom_count * k_atom_size;
+		linked_arenas.free_each([=](address i_value, size_type i_size) {
+			underlying_allocator::deallocate(i_value, i_size);
+		}, size);
+	}
+
+	static void unit_test();
+private:
+
 	address consume(size_type i_count) {
 		assert(arrays.length() >= i_count);
 		std::uint8_t* ptr = arrays.get_value();
@@ -109,11 +171,11 @@ private:
 			array_arena save (head);
 			save.set_length(left_over);
 			array_arena cur  = arrays.get_next();
-			if (cur.get_length() < left_over) {
+			if (cur.get_length() > left_over) {
 				arrays           = cur;
 				array_arena prev = save;
 				while (true) {
-					if (!cur || cur.get_length() >= left_over) {
+					if (!cur || cur.get_length() <= left_over) {
 						prev.set_next(save);
 						save.set_next(cur);
 						break;
@@ -134,16 +196,44 @@ private:
 		return ptr;
 	}
 
+	void release(address i_only, size_type i_count) {
+		array_arena new_arena(i_only, i_count);
+		array_arena cur  = arrays;
+			if (cur.get_length() > i_count) {
+				array_arena prev = new_arena;
+				while (true) {
+					if (!cur || cur.get_length() <= i_count) {
+						prev.set_next(new_arena);
+						new_arena.set_next(cur);
+						break;
+					}
+				}
+			} else {
+				new_arena.set_next(cur);
+				arrays = new_arena;
+			}
+	}
+
+	void release(address i_only) {
+		solo_arena arena(i_only);
+		arena.set_next(solo);
+		solo = arena;
+	}
+
 	void allocate_arena() {
-		array_arena new_arena(underlying_allocator::allocate(k_atom_count * k_atom_size),
+		size_type size = k_atom_count * k_atom_size;
+		array_arena new_arena(underlying_allocator::allocate(size + arena_linker::k_header_size),
 		                      k_atom_count);
+		linked_arenas.link_with(new_arena, size);
 		new_arena.set_next(arrays);
 		arrays = new_arena;
+		statistics::report_new_arena();
 	}
 
 	array_arena     arrays;
 	solo_arena      solo;
 	const size_type k_atom_count;
 	const size_type k_atom_size;
+	arena_linker linked_arenas;
 };
 } // namespace cppalloc

@@ -4,35 +4,45 @@
 
 namespace cppalloc {
 
-template <typename size_type = std::uint32_t, const bool k_growable = true>
-class best_fit_allocator {
-public:
-	enum { kInvalidOffset = 0xffffffff };
-	using address = size_type;
+namespace detail {
+enum : std::uint32_t { k_null_32 = std::numeric_limits<std::uint32_t>::max() };
+enum ordering_by : std::uint32_t { e_size, e_offset, k_count };
+struct ordering_type {
+	std::uint32_t next = k_null_32;
+	std::uint32_t prev = k_null_32;
+};
 
-	best_fit_allocator() = default;
+} // namespace detail
+
+template <typename size_type = std::uint32_t, const bool k_growable = true,
+          bool k_compute_stats = false>
+class best_fit_allocator : detail::statistics<k_compute_stats> {
+	using statistics = detail::statistics<k_compute_stats>;
+public:
+	enum {
+		k_invalid_offset = std::numeric_limits<size_type>::max(),
+	};
+	using address    = size_type;
+
+	best_fit_allocator() { statistics::report_new_arena(); };
 
 	//! Interface
 	address allocate(size_type i_size);
-	void deallocate(address i_offset, size_type i_size);
+	void    deallocate(address i_offset, size_type i_size);
 
 	//! Unittst
-	bool validate();
+	bool        validate();
 	static void unit_test();
 
 private:
-	enum { k_null = 0xffffffff };
+	using ordering_by   = detail::ordering_by;
+	using ordering_type = detail::ordering_type;
+
+	enum : std::uint32_t { k_null = std::numeric_limits<std::uint32_t>::max() };
 	struct list_type {
 		std::uint32_t first = k_null;
 		std::uint32_t last  = k_null;
 	};
-
-	struct ordering_type {
-		std::uint32_t next = k_null;
-		std::uint32_t prev = k_null;
-	};
-
-	enum ordering_by : std::uint32_t { e_size, e_offset, k_count };
 
 	struct block_type {
 		size_type offset = 0;
@@ -43,7 +53,7 @@ private:
 		inline size_type next_offset() const { return offset + size; }
 	};
 
-	using ordering_lists = std::array<list_type, k_count>;
+	using ordering_lists_array = std::array<list_type, k_count>;
 
 	template <ordering_by i_order>
 	inline ordering_type& order(std::uint32_t i_index);
@@ -70,18 +80,20 @@ private:
 	using block_list = std::vector<block_type>;
 
 	// forward iterator for free list
-	template <enum ordering_by i_order>
+	template <ordering_by i_order>
 	struct iterator
 	    : public std::iterator<std::bidirectional_iterator_tag, block_type> {
 		iterator(const iterator& i_other);
 		iterator(iterator&& i_other);
 
-		iterator(best_fit_allocator<k_growable, size_type>& iFather);
-		iterator(best_fit_allocator<k_growable, size_type>& iFather,
-		         std::uint32_t                              iLoc);
+		iterator(
+		    best_fit_allocator<size_type, k_growable, k_compute_stats>& i_other);
+		iterator(
+		    best_fit_allocator<size_type, k_growable, k_compute_stats>& i_other,
+		    std::uint32_t                                               i_loc);
 
 		inline iterator& operator=(iterator&& i_other) {
-			index        = i_other.index;
+			index         = i_other.index;
 			i_other.index = k_null;
 			return *this;
 		}
@@ -121,9 +133,13 @@ private:
 			return ret;
 		}
 
-		inline const block_type& operator*() const { return owner.get_block(index); }
+		inline const block_type& operator*() const {
+			return owner.get_block(index);
+		}
 
-		inline const block_type* operator->() const { return &owner.get_block(index); }
+		inline const block_type* operator->() const {
+			return &owner.get_block(index);
+		}
 
 		inline block_type& operator*() { return owner.get_block(index); }
 
@@ -140,26 +156,28 @@ private:
 		}
 
 		inline std::uint32_t get_raw() const { return index; }
-		best_fit_allocator<k_growable, size_type>& owner;
-		std::uint32_t                                 index = k_null;
+		best_fit_allocator<size_type, k_growable, k_compute_stats, k_compute_stats>&
+		              owner;
+		std::uint32_t index = k_null;
 	};
 
-	using free_iterator     = iterator<ordering_by::e_size>;
+	using free_iterator    = iterator<ordering_by::e_size>;
 	using OccupiedIterator = iterator<ordering_by::e_offset>;
 
-	inline block_type&       get_block(std::uint32_t iLoc);
-	inline const block_type& get_block(std::uint32_t iLoc) const;
+	inline block_type&       get_block(std::uint32_t i_loc);
+	inline const block_type& get_block(std::uint32_t i_loc) const;
 
 	inline free_iterator free_lookup(const free_iterator& i_begin,
 	                                 const free_iterator& i_end,
 	                                 size_type            i_size);
 
 	inline free_iterator free_lookup(const free_iterator& i_begin,
-	                               const free_iterator& i_end, size_type i_offset, size_type i_size);
+	                                 const free_iterator& i_end,
+	                                 size_type i_offset, size_type i_size);
 
-	template <enum ordering_by i_order> iterator<i_order> begin();
-	template <enum ordering_by i_order> iterator<i_order> end();
-	template <enum ordering_by i_order>
+	template <ordering_by i_order> iterator<i_order> begin();
+	template <ordering_by i_order> iterator<i_order> end();
+	template <ordering_by i_order>
 	iterator<i_order> prev(const iterator<i_order>& i_other);
 
 	size_type alloc_from(const free_iterator& i_it, size_type i_size);
@@ -171,9 +189,9 @@ private:
 	void erase_entry(std::uint32_t i_it);
 
 	std::uint32_t get_slot() {
-		if (firstFreeBlock != 0xffffffff) {
-			std::uint32_t offset = firstFreeBlock;
-			firstFreeBlock       = blocks[offset].offset;
+		if (first_free_block != 0xffffffff) {
+			std::uint32_t offset = first_free_block;
+			first_free_block     = blocks[offset].offset;
 			return offset;
 		} else {
 			std::uint32_t offset = static_cast<std::uint32_t>(blocks.size());
@@ -182,31 +200,30 @@ private:
 		}
 	}
 
-
 private:
-	block_list     blocks;
-	ordering_lists  ordering_lists;
-	std::uint32_t firstFreeBlock = 0xffffffff;
-	size_type     totalSize      = 0;
+	block_list           blocks;
+	ordering_lists_array ordering_lists;
+	std::uint32_t        first_free_block = 0xffffffff;
+	size_type            total_size       = 0;
 };
 
-template <typename size_type, bool k_growable>
-template <ordering_by i_order>
-inline ordering_type& best_fit_allocator<size_type, k_growable>::order(
-    std::uint32_t i_index) {
+template <typename size_type, bool k_growable, bool k_compute_stats>
+template <detail::ordering_by i_order>
+inline detail::ordering_type& best_fit_allocator<
+    size_type, k_growable, k_compute_stats>::order(std::uint32_t i_index) {
 	return blocks[i_index].orderings[i_order];
 }
 
-template <typename size_type, bool k_growable>
-template <ordering_by i_order>
-inline const ordering_type& best_fit_allocator<size_type, k_growable>::get(
-    std::uint32_t i_index) const {
+template <typename size_type, bool k_growable, bool k_compute_stats>
+template <detail::ordering_by i_order>
+inline const detail::ordering_type& best_fit_allocator<
+    size_type, k_growable, k_compute_stats>::get(std::uint32_t i_index) const {
 	return blocks[i_index].orderings[i_order];
 }
 
-template <typename size_type, bool k_growable>
-template <ordering_by i_order>
-inline void best_fit_allocator<size_type, k_growable>::insert(
+template <typename size_type, bool k_growable, bool k_compute_stats>
+template <detail::ordering_by i_order>
+inline void best_fit_allocator<size_type, k_growable, k_compute_stats>::insert(
     std::uint32_t i_where, std::uint32_t i_what) {
 	unlink_node<i_order>(i_what);
 	if (i_where < blocks.size()) {
@@ -231,10 +248,10 @@ inline void best_fit_allocator<size_type, k_growable>::insert(
 	}
 }
 
-template <typename size_type, bool k_growable>
-template <ordering_by i_order>
-inline void best_fit_allocator<size_type, k_growable>::unlink_node(
-    std::uint32_t i_where) {
+template <typename size_type, bool k_growable, bool k_compute_stats>
+template <detail::ordering_by i_order>
+inline void best_fit_allocator<size_type, k_growable, k_compute_stats>::
+    unlink_node(std::uint32_t i_where) {
 	std::uint32_t prev = order<i_order>(i_where).prev;
 	std::uint32_t next = order<i_order>(i_where).next;
 
@@ -253,9 +270,9 @@ inline void best_fit_allocator<size_type, k_growable>::unlink_node(
 	order<i_order>(i_where).next = k_null;
 }
 
-template <typename size_type, bool k_growable>
-template <ordering_by i_order>
-inline void best_fit_allocator<size_type, k_growable>::erase(
+template <typename size_type, bool k_growable, bool k_compute_stats>
+template <detail::ordering_by i_order>
+inline void best_fit_allocator<size_type, k_growable, k_compute_stats>::erase(
     std::uint32_t i_where) {
 	std::uint32_t prev = order<i_order>(i_where).prev;
 	std::uint32_t next = order<i_order>(i_where).next;
@@ -274,61 +291,74 @@ inline void best_fit_allocator<size_type, k_growable>::erase(
 	order<i_order>(i_where).next = k_null;
 }
 
-template <typename size_type, bool k_growable>
-template <>
-inline iterator<i_order> best_fit_allocator<size_type, k_growable>::begin() {
+template <typename size_type, bool k_growable, bool k_compute_stats>
+template <detail::ordering_by i_order>
+inline typename best_fit_allocator<size_type, k_growable,
+                                   k_compute_stats>::template iterator<i_order>
+best_fit_allocator<size_type, k_growable, k_compute_stats>::begin() {
 	return iterator<i_order>(*this, ordering_lists[i_order].first);
 }
 
-template <typename size_type, bool k_growable>
-template <>
-inline iterator<i_order> best_fit_allocator<size_type, k_growable>::end() {
+template <typename size_type, bool k_growable, bool k_compute_stats>
+template <detail::ordering_by i_order>
+inline typename best_fit_allocator<size_type, k_growable,
+                                   k_compute_stats>::template iterator<i_order>
+best_fit_allocator<size_type, k_growable, k_compute_stats>::end() {
 	return iterator<i_order>(*this);
 }
 
-template <typename size_type, bool k_growable>
-template <>
-inline iterator<i_order> best_fit_allocator<size_type, k_growable>::prev(
+template <typename size_type, bool k_growable, bool k_compute_stats>
+template <detail::ordering_by i_order>
+inline typename best_fit_allocator<size_type, k_growable,
+                                   k_compute_stats>::template iterator<i_order>
+best_fit_allocator<size_type, k_growable, k_compute_stats>::prev(
     const iterator<i_order>& i_other) {
 	return i_other.get_raw() == k_null
 	           ? iterator<i_order>(*this, ordering_lists[i_order].last)
 	           : iterator<i_order>(*this, i_other.prev());
 }
 
-template <typename size_type, bool k_growable>
-inline bool best_fit_allocator<size_type, k_growable>::cmp_by_size(
-    const block_type& i_first, const block_type& i_sec) {
+template <typename size_type, bool k_growable, bool k_compute_stats>
+inline bool best_fit_allocator<size_type, k_growable, k_compute_stats>::
+    cmp_by_size(const block_type& i_first, const block_type& i_sec) {
 	return (i_first.size < i_sec.size) ||
 	       (i_first.size == i_sec.size && i_first.offset < i_sec.offset);
 }
 
-template <typename size_type, bool k_growable>
-inline bool best_fit_allocator<size_type, k_growable>::cmp_by_size(
-    const block_type& i_first, size_type i_offset, size_type i_size) {
+template <typename size_type, bool k_growable, bool k_compute_stats>
+inline bool best_fit_allocator<size_type, k_growable, k_compute_stats>::
+    cmp_by_size(const block_type& i_first, size_type i_offset,
+                size_type i_size) {
 	return (i_first.size < i_size) ||
 	       (i_first.size == i_size && i_first.offset < i_offset);
 }
 
-template <typename size_type, bool k_growable>
-inline bool best_fit_allocator<size_type, k_growable>::cmp_by_offset(
-    const block_type& i_first, const block_type& i_sec) {
+template <typename size_type, bool k_growable, bool k_compute_stats>
+inline bool best_fit_allocator<size_type, k_growable, k_compute_stats>::
+    cmp_by_offset(const block_type& i_first, const block_type& i_sec) {
 	return i_first.offset < i_sec.offset;
 }
 
-template <typename size_type, bool k_growable>
-inline block_type& best_fit_allocator<size_type, k_growable>::get_block(
-    std::uint32_t iLoc) {
-	return blocks[iLoc];
+template <typename size_type, bool k_growable, bool k_compute_stats>
+inline typename best_fit_allocator<size_type, k_growable,
+                                   k_compute_stats>::block_type&
+best_fit_allocator<size_type, k_growable, k_compute_stats>::get_block(
+    std::uint32_t i_loc) {
+	return blocks[i_loc];
 }
 
-template <typename size_type, bool k_growable>
-inline const block_type& best_fit_allocator<size_type, k_growable>::get_block(
-    std::uint32_t iLoc) const {
-	return blocks[iLoc];
+template <typename size_type, bool k_growable, bool k_compute_stats>
+inline typename best_fit_allocator<size_type, k_growable,
+                                   k_compute_stats>::block_type const&
+best_fit_allocator<size_type, k_growable, k_compute_stats>::get_block(
+    std::uint32_t i_loc) const {
+	return blocks[i_loc];
 }
 
-template <typename size_type, bool k_growable>
-inline free_iterator best_fit_allocator<size_type, k_growable>::free_lookup(
+template <typename size_type, bool k_growable, bool k_compute_stats>
+inline typename best_fit_allocator<size_type, k_growable,
+                                   k_compute_stats>::free_iterator
+best_fit_allocator<size_type, k_growable, k_compute_stats>::free_lookup(
     const free_iterator& i_begin, const free_iterator& i_end,
     size_type i_size) {
 	return std::lower_bound(
@@ -338,8 +368,10 @@ inline free_iterator best_fit_allocator<size_type, k_growable>::free_lookup(
 	    });
 }
 
-template <typename size_type, bool k_growable>
-inline free_iterator best_fit_allocator<size_type, k_growable>::free_lookup(
+template <typename size_type, bool k_growable, bool k_compute_stats>
+inline typename best_fit_allocator<size_type, k_growable,
+                                   k_compute_stats>::free_iterator
+best_fit_allocator<size_type, k_growable, k_compute_stats>::free_lookup(
     const free_iterator& i_begin, const free_iterator& i_end,
     size_type i_offset, size_type i_size) {
 	return std::lower_bound(
@@ -349,9 +381,9 @@ inline free_iterator best_fit_allocator<size_type, k_growable>::free_lookup(
 	    });
 }
 
-template <typename size_type, bool k_growable>
-inline size_type best_fit_allocator<size_type, k_growable>::alloc_from(
-    const free_iterator& i_it, size_type i_size) {
+template <typename size_type, bool k_growable, bool k_compute_stats>
+inline size_type best_fit_allocator<size_type, k_growable, k_compute_stats>::
+    alloc_from(const free_iterator& i_it, size_type i_size) {
 	std::uint32_t block  = i_it.get_raw();
 	size_type     offset = blocks[block].offset;
 	blocks[block].offset += i_size;
@@ -364,19 +396,19 @@ inline size_type best_fit_allocator<size_type, k_growable>::alloc_from(
 	return offset;
 }
 
-template <typename size_type, bool k_growable>
-inline void best_fit_allocator<size_type, k_growable>::reinsert_left(
-    const free_iterator& i_it) {
-	free_iterator begin = begin<ordering_by::e_size>();
+template <typename size_type, bool k_growable, bool k_compute_stats>
+inline void best_fit_allocator<size_type, k_growable, k_compute_stats>::
+    reinsert_left(const free_iterator& i_it) {
+	free_iterator begin_it = begin<ordering_by::e_size>();
 	free_iterator end(i_it);
-	auto          it = free_lookup(begin, end, i_it->size);
+	auto          it = free_lookup(begin_it, end, i_it->size);
 	if (it != i_it)
 		insert<ordering_by::e_size>(it.get_raw(), i_it.get_raw());
 }
 
-template <typename size_type, bool k_growable>
-inline void best_fit_allocator<size_type, k_growable>::reinsert_right(
-    const free_iterator& i_it) {
+template <typename size_type, bool k_growable, bool k_compute_stats>
+inline void best_fit_allocator<size_type, k_growable, k_compute_stats>::
+    reinsert_right(const free_iterator& i_it) {
 	free_iterator begin = i_it;
 	free_iterator end(*this);
 	auto          it = free_lookup(begin, end, (*i_it).size);
@@ -384,47 +416,56 @@ inline void best_fit_allocator<size_type, k_growable>::reinsert_right(
 		insert<ordering_by::e_size>(it.get_raw(), i_it.get_raw());
 }
 
-template <typename size_type, bool k_growable>
-inline void best_fit_allocator<size_type, k_growable>::erase_entry(
-    std::uint32_t i_it) {
+template <typename size_type, bool k_growable, bool k_compute_stats>
+inline void best_fit_allocator<
+    size_type, k_growable, k_compute_stats>::erase_entry(std::uint32_t i_it) {
 	erase<ordering_by::e_size>(i_it);
 	erase<ordering_by::e_offset>(i_it);
-	blocks[i_it].offset = firstFreeBlock;
-	firstFreeBlock      = i_it;
+	blocks[i_it].offset = first_free_block;
+	first_free_block    = i_it;
 }
 
-template <typename size_type, bool k_growable>
-inline address best_fit_allocator<size_type, k_growable>::allocate(
-    size_type i_size) {
-	auto end   = end<ordering_by::e_size>();
-	auto found = free_lookup(begin<ordering_by::e_size>(), end, i_size);
-	if (found == end) {
+template <typename size_type, bool k_growable, bool k_compute_stats>
+inline
+    typename best_fit_allocator<size_type, k_growable, k_compute_stats>::address
+    best_fit_allocator<size_type, k_growable, k_compute_stats>::allocate(
+        size_type i_size) {
+
+	auto measure = statistics::report_allocate(i_size);
+
+	auto end_it = end<ordering_by::e_size>();
+	auto found  = free_lookup(begin<ordering_by::e_size>(), end_it, i_size);
+	if (found == end_it) {
 		if (k_growable) {
-			size_type offset = totalSize;
-			totalSize += i_size;
+			size_type offset = total_size;
+			total_size += i_size;
 			return offset;
 		} else
-			return kInvalidOffset;
+			return k_invalid_offset;
 	}
 	return alloc_from(found, i_size);
 }
 
-template <typename size_type, bool k_growable>
-inline void best_fit_allocator<size_type, k_growable>::deallocate(
-    address i_offset, size_type i_size) {
-	auto begin = begin<ordering_by::e_offset>();
-	auto end   = end<ordering_by::e_offset>();
+template <typename size_type, bool k_growable, bool k_compute_stats>
+inline void best_fit_allocator<size_type, k_growable,
+                               k_compute_stats>::deallocate(address   i_offset,
+                                                            size_type i_size) {
+	
+	auto measure = statistics::report_deallocate(i_size);
+
+	auto begin_it = begin<ordering_by::e_offset>();
+	auto end_it   = end<ordering_by::e_offset>();
 	auto node =
-	    std::lower_bound(begin, end, i_offset,
+	    std::lower_bound(begin_it, end_it, i_offset,
 	                     [](const block_type& block, size_type offset) -> bool {
 		                     return block.offset < offset;
 	                     });
 	size_type next_offset = i_offset + i_size;
-	if (next_offset > totalSize)
-		totalSize = next_offset;
+	if (next_offset > total_size)
+		total_size = next_offset;
 	decltype(node) prev_free(*this);
-	if (node != begin && (prev_free = prev(node))->next_offset() == i_offset) {
-		if (node != end && next_offset == node->offset) {
+	if (node != begin_it && (prev_free = prev(node))->next_offset() == i_offset) {
+		if (node != end_it && next_offset == node->offset) {
 			// merge prev_free + this + node
 			free_iterator prev_free_list_it(*this, prev_free.get_raw());
 			prev_free->size += i_size;
@@ -437,7 +478,7 @@ inline void best_fit_allocator<size_type, k_growable>::deallocate(
 			prev_free->size += i_size;
 			reinsert_right(prev_free_list_it);
 		}
-	} else if (node != end && next_offset == node->offset) {
+	} else if (node != end_it && next_offset == node->offset) {
 		// merge this + node
 		node->offset = i_offset;
 		node->size += i_size;
@@ -445,21 +486,22 @@ inline void best_fit_allocator<size_type, k_growable>::deallocate(
 		reinsert_right(nodeFLI);
 	} else {
 		// new node
-		auto          begin      = begin<ordering_by::e_size>();
-		auto          end        = end<ordering_by::e_size>();
+		auto          begin_it   = begin<ordering_by::e_size>();
+		auto          end_it     = end<ordering_by::e_size>();
 		std::uint32_t slot       = get_slot();
 		block_type&   next_block = blocks[slot];
 		next_block.offset        = i_offset;
 		next_block.size          = i_size;
 
-		auto it = free_lookup(begin, end, i_offset, i_size);
+		auto it = free_lookup(begin_it, end_it, i_offset, i_size);
 		insert<ordering_by::e_offset>(node.get_raw(), slot);
 		insert<ordering_by::e_size>(it.get_raw(), slot);
 	}
 }
 
-template <typename size_type, bool k_growable>
-inline bool best_fit_allocator<size_type, k_growable>::validate() {
+template <typename size_type, bool k_growable, bool k_compute_stats>
+inline bool best_fit_allocator<size_type, k_growable,
+                               k_compute_stats>::validate() {
 	auto ordered = [](const std::uint32_t first, const block_type& second,
 	                  ordering_by i_order) -> bool {
 		return (second.orderings[i_order].prev == first);
@@ -507,21 +549,22 @@ inline bool best_fit_allocator<size_type, k_growable>::validate() {
 	return true;
 }
 
-template <typename size_type, bool k_growable>
-inline void best_fit_allocator<size_type, k_growable>::unit_test() {
-	best_fit_allocator<k_growable, size_type>    allocator;
-	std::minstd_rand                             gen;
-	std::bernoulli_distribution                  allocOrFree(0.7);
-	std::uniform_int_distribution<std::uint32_t> allocGen(1, 100000);
+template <typename size_type, bool k_growable, bool k_compute_stats>
+inline void best_fit_allocator<size_type, k_growable,
+                               k_compute_stats>::unit_test() {
+	best_fit_allocator<size_type, k_growable, k_compute_stats> allocator;
+	std::minstd_rand                                           gen;
+	std::bernoulli_distribution                                dice(0.7);
+	std::uniform_int_distribution<std::uint32_t> generator(1, 100000);
 
-	struct Record {
+	struct record {
 		size_type offset, size;
 	};
-	std::vector<Record> allocated;
+	std::vector<record> allocated;
 	for (std::uint32_t allocs = 0; allocs < 10000; ++allocs) {
-		if (allocOrFree(gen)) {
-			Record r;
-			r.size   = allocGen(gen);
+		if (dice(gen)) {
+			record r;
+			r.size   = generator(gen);
 			r.offset = allocator.allocate(r.size);
 			if (r.offset != k_null)
 				allocated.push_back(r);
@@ -530,33 +573,40 @@ inline void best_fit_allocator<size_type, k_growable>::unit_test() {
 			std::uniform_int_distribution<std::uint32_t> choose(0,
 			                                                    allocated.size() - 1);
 			std::uint32_t                                chosen = choose(gen);
-			allocator.Free(allocated[chosen].offset, allocated[chosen].size);
+			allocator.deallocate(allocated[chosen].offset, allocated[chosen].size);
 			allocated.erase(allocated.begin() + chosen);
 			assert(allocator.validate());
 		}
 	}
 }
 
-template <typename size_type, bool k_growable>
-inline best_fit_allocator<size_type, k_growable>::iterator<>::iterator(
-    const iterator& i_other)
+template <typename size_type, bool k_growable, bool k_compute_stats>
+template <detail::ordering_by i_order>
+inline best_fit_allocator<size_type, k_growable, k_compute_stats>::
+    template iterator<i_order>::iterator(const iterator<i_order>& i_other)
     : owner(i_other.owner), index(i_other.index) {}
 
-template <typename size_type, bool k_growable>
-inline best_fit_allocator<size_type, k_growable>::iterator<>::iterator(
-    iterator&& i_other)
+template <typename size_type, bool k_growable, bool k_compute_stats>
+template <detail::ordering_by i_order>
+inline best_fit_allocator<size_type, k_growable, k_compute_stats>::
+    template iterator<i_order>::iterator(iterator&& i_other)
     : owner(i_other.owner), index(i_other.index) {
 	i_other.index = k_null;
 }
 
-template <typename size_type, bool k_growable>
-inline best_fit_allocator<size_type, k_growable>::iterator<>::iterator(
-    best_fit_allocator<k_growable, size_type>& iFather)
-    : owner(iFather), index(k_null) {}
+template <typename size_type, bool k_growable, bool k_compute_stats>
+template <detail::ordering_by i_order>
+inline best_fit_allocator<size_type, k_growable, k_compute_stats>::
+    template iterator<i_order>::iterator(
+        best_fit_allocator<size_type, k_growable, k_compute_stats>& i_other)
+    : owner(i_other), index(k_null) {}
 
-template <typename size_type, bool k_growable>
-inline best_fit_allocator<size_type, k_growable>::iterator<>::iterator(
-    best_fit_allocator<k_growable, size_type>& iFather, std::uint32_t iLoc)
-    : owner(iFather), index(iLoc) {}
+template <typename size_type, bool k_growable, bool k_compute_stats>
+template <detail::ordering_by i_order>
+inline best_fit_allocator<size_type, k_growable, k_compute_stats>::
+    template iterator<i_order>::iterator(
+        best_fit_allocator<size_type, k_growable, k_compute_stats>& i_other,
+        std::uint32_t                                               i_loc)
+    : owner(i_other), index(i_loc) {}
 
 } // namespace cppalloc

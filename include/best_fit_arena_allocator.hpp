@@ -5,8 +5,12 @@
 namespace cppalloc {
 
 //! @remarks Class represents an allocator
-template <typename size_type = std::uint32_t, typename arena_manager>
-class best_fit_arena_allocator : public arena_manager {
+template <typename arena_manager, typename size_type = std::uint32_t,
+          bool k_compute_stats = false>
+class best_fit_arena_allocator : detail::statistics<k_compute_stats>,
+                                 public arena_manager {
+	using statistics = detail::statistics<k_compute_stats>;
+
 public:
 	enum : size_type {
 		k_invalid_offset = std::numeric_limits<size_type>::max(),
@@ -34,7 +38,8 @@ private:
 		size_type id;
 	};
 
-	using block_list = vector<block_type>;
+	using block_list    = std::vector<block_type>;
+	using block_list_it = typename block_list::iterator;
 	bool      is_valid() const;
 	size_type add_arena(size_type i_user_handle, size_type i_arena_size);
 
@@ -56,18 +61,21 @@ public:
 	void      defragment();
 	float     get_fragmentation();
 
+	static void unit_test();
+
 	class move_iterator {
+		using iterator = block_list_it;
+
 	public:
-		move_iterator(block_list::iterator i_it, block_list::iterator i_end,
-		              size_type i_delta);
+		move_iterator(iterator i_it, iterator i_end, size_type i_delta);
 
 		inline bool has_next(size_type& o_handle);
 		inline void modify_offset(size_type& io_offset);
 
 	private:
-		block_list::iterator it;
-		block_list::iterator end;
-		size_type            delta_offset;
+		iterator  it;
+		iterator  end;
+		size_type delta_offset;
 	};
 
 private:
@@ -77,7 +85,7 @@ private:
 		block_list blocks;
 	};
 
-	using arena_list = vector<arena>;
+	using arena_list = std::vector<arena>;
 
 	struct locator_type {
 		size_type offset;
@@ -109,40 +117,41 @@ private:
 		}
 	};
 
-	using free_block_list = vector<free_block_type>;
+	using free_block_list    = std::vector<free_block_type>;
+	using free_block_list_it = typename free_block_list::iterator;
 
-	inline free_block_list::iterator free_lookup(free_block_list::iterator begin,
-	                                             free_block_list::iterator end,
-	                                             free_block_type lookup);
-	inline free_block_list::iterator merge_free(free_block_type i_rem,
-	                                            size_type       i_merge_size,
-	                                            size_type       i_new_offset);
+	inline free_block_list_it free_lookup(free_block_list_it begin,
+	                                      free_block_list_it end,
+	                                      free_block_type    lookup);
+	inline free_block_list_it merge_free(free_block_type i_rem,
+	                                     size_type       i_merge_size,
+	                                     size_type       i_new_offset);
 
-	inline free_block_list::iterator reinsert_left(
-	    free_block_list::iterator node);
-	inline free_block_list::iterator reinsert_right(
-	    free_block_list::iterator node);
-	inline void erase_and_reinsert(free_block_list::iterator erase,
-	                               free_block_list::iterator reinsert);
+	inline free_block_list_it reinsert_left(free_block_list_it node);
+	inline free_block_list_it reinsert_right(free_block_list_it node);
+	inline void               erase_and_reinsert(free_block_list_it erase,
+	                                             free_block_list_it reinsert);
 
-	arena_list        arenas;
-	free_block_list   free_list;
-	vector<size_type> free_pages;
-	size_type         free_size = 0;
-	size_type         arena_size;
+	arena_list             arenas;
+	free_block_list        free_list;
+	std::vector<size_type> free_pages;
+	size_type              free_size = 0;
+	size_type              arena_size;
 };
 
-template <typename size_type, typename arena_manager>
+template <typename arena_manager, typename size_type, bool k_compute_stats>
 template <typename... Args>
-inline best_fit_arena_allocator<
-    size_type, arena_manager>::best_fit_arena_allocator(size_type i_arena_size,
-                                                        Args&&... i_args)
+inline best_fit_arena_allocator<arena_manager, size_type, k_compute_stats>::
+    best_fit_arena_allocator(size_type i_arena_size, Args&&... i_args)
     : arena_manager(std::forward<Args>(i_args)...), arena_size(i_arena_size) {}
 
-template <typename size_type, typename arena_manager>
-inline best_fit_arena_allocator<size_type, arena_manager>::address
-best_fit_arena_allocator<size_type, arena_manager>::allocate(
+template <typename arena_manager, typename size_type, bool k_compute_stats>
+inline typename best_fit_arena_allocator<arena_manager, size_type,
+                                         k_compute_stats>::address
+best_fit_arena_allocator<arena_manager, size_type, k_compute_stats>::allocate(
     size_type i_size, size_type i_user_handle, option_flags i_options) {
+
+	auto measure = statistics::report_allocate(i_size);
 
 	assert(i_user_handle != k_invalid_handle);
 	if (i_options & f_alloc_new_arena) {
@@ -199,16 +208,20 @@ best_fit_arena_allocator<size_type, arena_manager>::allocate(
 }
 
 //! Helpers
-template <typename size_type, typename arena_manager>
+template <typename arena_manager, typename size_type, bool k_compute_stats>
 inline size_type best_fit_arena_allocator<
-    size_type, arena_manager>::get_free_size() const {
+    arena_manager, size_type, k_compute_stats>::get_free_size() const {
 	return free_size;
 }
 
-template <typename size_type, typename arena_manager>
-inline void best_fit_arena_allocator<size_type, arena_manager>::deallocate(
-    best_fit_arena_allocator<size_type, arena_manager>::address i_address,
-    size_type                                                   i_size) {
+template <typename arena_manager, typename size_type, bool k_compute_stats>
+inline void best_fit_arena_allocator<arena_manager, size_type,
+                                     k_compute_stats>::
+    deallocate(best_fit_arena_allocator<arena_manager, size_type,
+                                        k_compute_stats>::address i_address,
+               size_type                                          i_size) {
+
+	auto measure = statistics::report_deallocate(i_size);
 
 	auto& arena     = arenas[i_address.arena];
 	auto& node_list = arena.blocks;
@@ -220,20 +233,22 @@ inline void best_fit_arena_allocator<size_type, arena_manager>::deallocate(
 
 	assert(node->offset == i_address.offset);
 	// last index is not used
-	block_list::iterator next = std::next(node);
-	size_type            size = next->offset - node->offset;
+	block_list_it next = std::next(node);
+	size_type     size = next->offset - node->offset;
 	free_size += size;
 	arena.free_size += size;
-	block_list::iterator it = node;
+	block_list_it it = node;
 
-	size_type            merges = 0;
-	block_list::iterator prev;
-	locator_type         left_removal = {
+	size_type     merges = 0;
+	block_list_it prev;
+	locator_type  left_removal = {
       k_invalid_offset,
-      best_fit_arena_allocator<size_type, arena_manager>::k_invalid_size};
+      best_fit_arena_allocator<arena_manager, size_type,
+                               k_compute_stats>::k_invalid_size};
 	locator_type right_removal = {
 	    k_invalid_offset,
-	    best_fit_arena_allocator<size_type, arena_manager>::k_invalid_size};
+	    best_fit_arena_allocator<arena_manager, size_type,
+	                             k_compute_stats>::k_invalid_size};
 
 	if (node != node_list.begin() &&
 	    (prev = std::prev(node))->id == k_invalid_handle) {
@@ -313,8 +328,9 @@ inline void best_fit_arena_allocator<size_type, arena_manager>::deallocate(
 	}
 }
 
-template <typename size_type, typename arena_manager>
-inline void best_fit_arena_allocator<size_type, arena_manager>::defragment() {
+template <typename arena_manager, typename size_type, bool k_compute_stats>
+inline void best_fit_arena_allocator<arena_manager, size_type,
+                                     k_compute_stats>::defragment() {
 	// move all memory to one end
 	free_block_list new_free_list;
 	size_type       arena_count = static_cast<size_type>(arenas.size());
@@ -402,9 +418,13 @@ inline void best_fit_arena_allocator<size_type, arena_manager>::defragment() {
 	assert(total_remove_size == free_size);
 }
 
-template <typename size_type, typename arena_manager>
-inline size_type best_fit_arena_allocator<size_type, arena_manager>::add_arena(
-    size_type i_handle, size_type i_arena_size) {
+template <typename arena_manager, typename size_type, bool k_compute_stats>
+inline size_type best_fit_arena_allocator<
+    arena_manager, size_type,
+    k_compute_stats>::add_arena(size_type i_handle, size_type i_arena_size) {
+
+	statistics::report_new_arena();
+
 	size_type arena_num = static_cast<size_type>(arenas.size());
 	if (free_pages.size() > 0) {
 		arena_num = free_pages.back();
@@ -429,23 +449,24 @@ inline size_type best_fit_arena_allocator<size_type, arena_manager>::add_arena(
 	return arena_num;
 }
 
-template <typename size_type, typename arena_manager>
+template <typename arena_manager, typename size_type, bool k_compute_stats>
 inline size_type best_fit_arena_allocator<
-    size_type, arena_manager>::get_max_free_block_size() const {
+    arena_manager, size_type, k_compute_stats>::get_max_free_block_size()
+    const {
 	return free_list.size() > 0 ? free_list.back().size : 0;
 }
 
-template <typename size_type, typename arena_manager>
-inline float best_fit_arena_allocator<size_type,
-                                      arena_manager>::get_fragmentation() {
+template <typename arena_manager, typename size_type, bool k_compute_stats>
+inline float best_fit_arena_allocator<arena_manager, size_type,
+                                      k_compute_stats>::get_fragmentation() {
 	return free_list.size() > 0
 	           ? (float)(free_size - free_list.back().size) / (float)free_size
 	           : 0.0f;
 }
 
-template <typename size_type, typename arena_manager>
-inline bool best_fit_arena_allocator<size_type, arena_manager>::is_valid()
-    const {
+template <typename arena_manager, typename size_type, bool k_compute_stats>
+inline bool best_fit_arena_allocator<arena_manager, size_type,
+                                     k_compute_stats>::is_valid() const {
 	size_type computed_size = 0;
 
 	for (size_type i = 0; i < free_list.size(); ++i) {
@@ -480,23 +501,26 @@ inline bool best_fit_arena_allocator<size_type, arena_manager>::is_valid()
 	return true;
 }
 
-template <typename size_type, typename arena_manager>
-inline void best_fit_arena_allocator<size_type, arena_manager>::
-    erase_and_reinsert(free_block_list::iterator erase,
-                       free_block_list::iterator reinsert) {
+template <typename arena_manager, typename size_type, bool k_compute_stats>
+inline void best_fit_arena_allocator<
+    arena_manager, size_type,
+    k_compute_stats>::erase_and_reinsert(free_block_list_it erase,
+                                         free_block_list_it reinsert) {
 	// erase is left to reinsert, so we can reinsert to right and still have a
 	// valid iterator.
 	reinsert_right(reinsert);
 	free_list.erase(erase);
 }
 
-template <typename size_type, typename arena_manager>
-inline free_block_list::iterator best_fit_arena_allocator<
-    size_type, arena_manager>::reinsert_right(free_block_list::iterator node) {
-	free_block_list::iterator end  = free_list.end();
-	free_block_type           copy = *node;
-	auto                      next = std::next(node);
-	auto                      it   = free_lookup(next, end, *node);
+template <typename arena_manager, typename size_type, bool k_compute_stats>
+inline typename best_fit_arena_allocator<arena_manager, size_type,
+                                         k_compute_stats>::free_block_list_it
+best_fit_arena_allocator<arena_manager, size_type, k_compute_stats>::
+    reinsert_right(free_block_list_it node) {
+	free_block_list_it end  = free_list.end();
+	free_block_type    copy = *node;
+	auto               next = std::next(node);
+	auto               it   = free_lookup(next, end, *node);
 	if (it != next) {
 		free_block_type* dest  = &*node;
 		free_block_type* src   = dest + 1;
@@ -509,12 +533,14 @@ inline free_block_list::iterator best_fit_arena_allocator<
 	return node;
 }
 
-template <typename size_type, typename arena_manager>
-inline free_block_list::iterator best_fit_arena_allocator<
-    size_type, arena_manager>::reinsert_left(free_block_list::iterator node) {
-	free_block_list::iterator begin = free_list.begin();
-	free_block_type           copy  = *node;
-	auto                      it    = free_lookup(begin, node, *node);
+template <typename arena_manager, typename size_type, bool k_compute_stats>
+inline typename best_fit_arena_allocator<arena_manager, size_type,
+                                         k_compute_stats>::free_block_list_it
+best_fit_arena_allocator<arena_manager, size_type, k_compute_stats>::
+    reinsert_left(free_block_list_it node) {
+	free_block_list_it begin = free_list.begin();
+	free_block_type    copy  = *node;
+	auto               it    = free_lookup(begin, node, *node);
 	if (it != node) {
 		free_block_type* src   = &*it;
 		free_block_type* dest  = src + 1;
@@ -526,11 +552,11 @@ inline free_block_list::iterator best_fit_arena_allocator<
 	return node;
 }
 
-template <typename size_type, typename arena_manager>
-inline free_block_list::iterator best_fit_arena_allocator<
-    size_type, arena_manager>::merge_free(free_block_type i_rem,
-                                          size_type       i_merge_size,
-                                          size_type       i_new_offset) {
+template <typename arena_manager, typename size_type, bool k_compute_stats>
+inline typename best_fit_arena_allocator<arena_manager, size_type,
+                                         k_compute_stats>::free_block_list_it
+best_fit_arena_allocator<arena_manager, size_type, k_compute_stats>::merge_free(
+    free_block_type i_rem, size_type i_merge_size, size_type i_new_offset) {
 	auto found = free_lookup(free_list.begin(), free_list.end(), i_rem);
 	assert(found != free_list.end() && (*found) == i_rem);
 	found->size += i_merge_size;
@@ -538,23 +564,26 @@ inline free_block_list::iterator best_fit_arena_allocator<
 	return reinsert_right(found);
 }
 
-template <typename size_type, typename arena_manager>
-inline free_block_list::iterator best_fit_arena_allocator<
-    size_type, arena_manager>::free_lookup(free_block_list::iterator begin,
-                                           free_block_list::iterator end,
-                                           free_block_type           lookup) {
+template <typename arena_manager, typename size_type, bool k_compute_stats>
+inline typename best_fit_arena_allocator<arena_manager, size_type,
+                                         k_compute_stats>::free_block_list_it
+best_fit_arena_allocator<arena_manager, size_type,
+                         k_compute_stats>::free_lookup(free_block_list_it begin,
+                                                       free_block_list_it end,
+                                                       free_block_type lookup) {
 	return std::lower_bound(begin, end, lookup);
 }
 
-template <typename size_type, typename arena_manager>
-inline best_fit_arena_allocator<size_type, arena_manager>::move_iterator::
-    move_iterator(block_list::iterator i_it, block_list::iterator i_end,
-                  size_type i_delta)
+template <typename arena_manager, typename size_type, bool k_compute_stats>
+inline best_fit_arena_allocator<arena_manager, size_type, k_compute_stats>::
+    move_iterator::move_iterator(block_list_it i_it, block_list_it i_end,
+                                 size_type i_delta)
     : it(i_it), end(i_end), delta_offset(i_delta) {}
 
-template <typename size_type, typename arena_manager>
+template <typename arena_manager, typename size_type, bool k_compute_stats>
 inline bool best_fit_arena_allocator<
-    size_type, arena_manager>::move_iterator::has_next(size_type& o_handle) {
+    arena_manager, size_type,
+    k_compute_stats>::move_iterator::has_next(size_type& o_handle) {
 	if (it != end) {
 		o_handle = (*it++).id;
 		return true;
@@ -562,9 +591,10 @@ inline bool best_fit_arena_allocator<
 	return false;
 }
 
-template <typename size_type, typename arena_manager>
-inline void best_fit_arena_allocator<size_type, arena_manager>::move_iterator::
-    modify_offset(size_type& io_offset) {
+template <typename arena_manager, typename size_type, bool k_compute_stats>
+inline void best_fit_arena_allocator<
+    arena_manager, size_type,
+    k_compute_stats>::move_iterator::modify_offset(size_type& io_offset) {
 	io_offset -= delta_offset;
 }
 
