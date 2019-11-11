@@ -66,6 +66,7 @@ struct statistics : public base_t {
 	statistics(Args&&... i_args) : base_t(std::forward<Args>(i_args)...) {}
 
 	void report_new_arena(std::uint32_t count = 1) { arenas_allocated += count; }
+	
 	[[nodiscard]] timer_t::scoped report_allocate(std::size_t size) {
 		allocation_count++;
 		allocation += size;

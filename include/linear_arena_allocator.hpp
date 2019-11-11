@@ -17,27 +17,26 @@ public:
 	using address    = typename underlying_allocator::address;
 	enum : size_type {
 		k_minimum_size =
-		    static_cast<size_type>(std::hardware_destructive_interference_size)
+		    static_cast<size_type>(64)
 	};
 
 	template <typename... Args>
 	linear_arena_allocator(size_type i_arena_size, Args&&... i_args)
 	    : k_arena_size(i_arena_size),
-	      statistics(std::forward<Args>(i_args)...) {
+	      statistics(std::forward<Args>(i_args)...), current_arena(0) {
 		// Initializing the cursor is important for the
 		// allocate loop to work.
-		current_arena = allocate_new_arena(k_arena_size);
 	}
 
 	address allocate(size_type i_size) {
 
 		auto measure = statistics::report_allocate(i_size);
 
-		for (size_type id  = current_arena,
+		for (size_type index = current_arena,
 		               end = static_cast<size_type>(arenas.size());
-		     id < end; ++id) {
-			size_type index = id - 1;
-			if (arenas[index].left_over > i_size)
+		     index < end; ++index) {
+			
+			if (arenas[index].left_over >= i_size)
 				return allocate_from(index, i_size);
 			else {
 				if (arenas[index].left_over < k_minimum_size && index != current_arena)
@@ -83,6 +82,8 @@ private:
 	}
 
 	inline size_type allocate_new_arena(size_type size) {
+		statistics::report_new_arena();
+
 		size_type index = static_cast<size_type>(arenas.size());
 		arenas.emplace_back(underlying_allocator::allocate(size), size, size);
 		return index;

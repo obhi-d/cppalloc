@@ -18,7 +18,7 @@ struct best_fit_allocator_tag {};
 template <typename size_type = std::uint32_t, const bool k_growable = true,
           bool k_compute_stats = false>
 class best_fit_allocator
-    : detail::statistics<best_fit_allocator_tag, k_compute_stats> {
+    : public detail::statistics<best_fit_allocator_tag, k_compute_stats> {
 	using statistics = detail::statistics<best_fit_allocator_tag, k_compute_stats>;
 
 public:
@@ -564,7 +564,7 @@ inline void best_fit_allocator<size_type, k_growable,
 	};
 	std::vector<record> allocated;
 	for (std::uint32_t allocs = 0; allocs < 10000; ++allocs) {
-		if (dice(gen)) {
+		if (dice(gen) || allocated.size() == 0) {
 			record r;
 			r.size   = generator(gen);
 			r.offset = allocator.allocate(r.size);

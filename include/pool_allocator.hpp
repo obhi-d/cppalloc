@@ -34,14 +34,10 @@ public:
 		auto measure = statistics::report_allocate(i_size);
 		if (i_count == 1) {
 			if (!solo) {
-				if (!arrays)
-					allocate_arena();
 				return consume(1);
 			}
 			return consume();
 		} else {
-			if (!arrays)
-				allocate_arena();
 			return consume(i_count);
 		}
 	}
@@ -160,13 +156,15 @@ private:
 
 		enum : size_type { k_header_size = sizeof(void*) };
 
-		void link_with(array_arena arena, size_type size) {
-			void** loc = reinterpret_cast<void**>(arena.value + size);
-			*loc       = first;
-			first      = loc;
+		void link_with(address arena, size_type size) {
+			void** loc =
+			    reinterpret_cast<void**>(static_cast<std::uint8_t*>(arena) + size);
+			*loc  = first;
+			first = loc;
 		}
 
-		template <typename lambda> void for_each(lambda&& i_deleter, size_type size) {
+		template <typename lambda>
+		void for_each(lambda&& i_deleter, size_type size) {
 			size_type real_size = size + k_header_size;
 			void*     it        = first;
 			while (it) {
@@ -194,21 +192,31 @@ public:
 
 private:
 	address consume(size_type i_count) {
-		assert(arrays.length() >= i_count);
+		size_type len;
+		if (!arrays || (len = arrays.length()) < i_count) {
+			allocate_arena();
+			len = arrays.length();
+		}
+
+		assert(len >= i_count);
 		std::uint8_t* ptr       = arrays.get_value();
 		std::uint8_t* head      = ptr + (i_count * k_atom_size);
-		size_type     left_over = arrays.length() - i_count;
-		if (left_over == 1) {
+		size_type     left_over = len - i_count;
+		switch (left_over) {
+		case 0:
+			arrays = arrays.get_next();
+			break;
+		case 1: {
 			solo_arena new_solo(head);
 			arrays = arrays.get_next();
 			new_solo.set_next(solo);
 			solo = new_solo;
-		} else {
+		} break;
+		default: {
 			// reorder arrays to sort them from big to small
-			array_arena save(head);
-			save.set_length(left_over);
 			array_arena cur = arrays.get_next();
-			if (cur.length() > left_over) {
+			array_arena save(head, left_over);
+			if (cur && cur.length() > left_over) {
 				arrays           = cur;
 				array_arena prev = save;
 				while (true) {
@@ -217,12 +225,16 @@ private:
 						save.set_next(cur);
 						break;
 					}
+					prev = cur;
+					cur  = cur.get_next();
 				}
 			} else {
 				save.set_next(cur);
 				arrays = save;
 			}
+		} break;
 		}
+
 		return ptr;
 	}
 
@@ -243,6 +255,8 @@ private:
 					new_arena.set_next(cur);
 					break;
 				}
+				prev = cur;
+				cur  = cur.get_next();
 			}
 		} else {
 			new_arena.set_next(cur);
@@ -257,11 +271,11 @@ private:
 	}
 
 	void allocate_arena() {
-		size_type   size = k_atom_count * k_atom_size;
-		array_arena new_arena(
-		    underlying_allocator::allocate(size + arena_linker::k_header_size),
-		    k_atom_count);
-		linked_arenas.link_with(new_arena, size);
+		size_type size = k_atom_count * k_atom_size;
+		address   arena_data =
+		    underlying_allocator::allocate(size + arena_linker::k_header_size);
+		array_arena new_arena(arena_data, k_atom_count);
+		linked_arenas.link_with(arena_data, size);
 		new_arena.set_next(arrays);
 		arrays = new_arena;
 		statistics::report_new_arena();
@@ -326,14 +340,14 @@ public:
 		std::vector<record>                          records;
 		std::minstd_rand                             gen;
 		std::bernoulli_distribution                  dice(0.6);
-		std::uniform_int_distribution<std::uint32_t> generator(1, k_atom_count);
+		std::uniform_int_distribution<std::uint32_t> generator(1, k_atom_count / 2);
 
 		allocator_t allocator(sizeof(trivial_object), k_atom_count);
 
 		auto validate = [&]() { return allocator.validate(records); };
 
-		for (std::uint32_t allocs = 0; allocs < 100000; ++allocs) {
-			if (dice(gen)) {
+		for (std::uint32_t allocs = 0; allocs < 10000; ++allocs) {
+			if (dice(gen) || records.size() == 0) {
 				record r;
 
 				r.count = dice(gen) ? 1 : generator(gen);

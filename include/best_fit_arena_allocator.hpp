@@ -7,11 +7,25 @@ namespace cppalloc {
 struct arena_manager_adapter {
 	struct address {
 		std::uint32_t offset;
-		std::uint32_t page;
+		std::uint32_t arena;
 	};
 	static bool drop_arena([[maybe_unused]] std::uint32_t id) { return true; }
 	static void add_arena([[maybe_unused]] std::uint32_t id,
 	                      [[maybe_unused]] std::uint32_t size) {}
+	//! @remarks The move operation paramters can be used
+	//! to adjust memory offsets after a defragment operation.
+	//! @param src This is the source of the memory (offset, arena) that is being
+	//! moved
+	//! @param dst This is the destination memory location (offset, arena) where
+	//! the memory chunk should be copied
+	//! @param size This indicates the total size of the memory chunk to be moved
+	//! @param iterator This iterator can be used to move memory offsets as
+	//! pointed to by each address object corresponding
+	//!                 to each handle whose memory was moved. There could be
+	//!                 multiple handles per move, an a single memory block that
+	//!                 is moved across in the given arena. Use the has_next,
+	//!                 modify_offset methods in the move iterator to get handle
+	//!                 corresponding to a move and adjust the offset.
 	template <typename iter_type>
 	static void move_memory([[maybe_unused]] address       src,
 	                        [[maybe_unused]] address       dst,
@@ -19,16 +33,22 @@ struct arena_manager_adapter {
 	                        [[maybe_unused]] iter_type     iterator) {}
 };
 
-struct best_fit_arena_allocator_tag {};
+template <typename size_type> struct best_fit_arena_allocator_tag {
+	struct address {
+		size_type offset;
+		size_type arena;
+	};
+};
 
 //! @remarks Class represents an allocator
 
 template <typename arena_manager, typename size_type = std::uint32_t,
           bool k_compute_stats = false>
 class best_fit_arena_allocator
-    : detail::statistics<best_fit_arena_allocator_tag, k_compute_stats,
-                         arena_manager>  {
-	using statistics = detail::statistics<best_fit_arena_allocator_tag, k_compute_stats, arena_manager>;
+    : public detail::statistics<best_fit_arena_allocator_tag<size_type>,
+                                k_compute_stats> {
+	using statistics = detail::statistics<best_fit_arena_allocator_tag<size_type>,
+	                                      k_compute_stats>;
 
 public:
 	enum : size_type {
@@ -44,12 +64,8 @@ public:
 	};
 
 	using option_flags = std::uint32_t;
-
+	using address = typename best_fit_arena_allocator_tag<size_type>::address;
 	//! Address
-	struct address {
-		size_type offset;
-		size_type arena;
-	};
 
 private:
 	struct block_type {
@@ -59,13 +75,14 @@ private:
 
 	using block_list    = std::vector<block_type>;
 	using block_list_it = typename block_list::iterator;
-	bool      validate() const;
+
 	size_type add_arena(size_type i_user_handle, size_type i_arena_size);
 
 public:
 	//! Inteface
 	template <typename... Args>
-	best_fit_arena_allocator(size_type i_arena_size, Args&&...);
+	best_fit_arena_allocator(size_type i_arena_size, arena_manager& i_manager,
+	                         Args&&...);
 
 	//! Allocate, second paramter is the user_handle to be associated with the
 	//! allocation
@@ -97,8 +114,11 @@ public:
 
 private:
 	struct arena {
-		size_type  total_size;
-		size_type  free_size;
+		size_type total_size;
+		union {
+			size_type free_size;
+			size_type next_free;
+		};
 		block_list blocks;
 	};
 
@@ -149,41 +169,80 @@ private:
 	inline void               erase_and_reinsert(free_block_list_it erase,
 	                                             free_block_list_it reinsert);
 
-	arena_list             arenas;
-	free_block_list        free_list;
-	std::vector<size_type> free_pages;
-	size_type              free_size = 0;
-	size_type              arena_size;
+	arena_list      arenas;
+	free_block_list free_list;
+	size_type       free_pages = k_invalid_page;
+	size_type       free_size  = 0;
+	size_type       arena_size;
+	arena_manager&  manager;
 
 public:
+	bool        validate() const;
 	static void unit_test() {
+
+		using address_t =
+		    typename best_fit_arena_allocator_tag<std::uint32_t>::address;
+		struct record {
+			address_t     offset;
+			std::uint32_t size;
+		};
+
+		struct example_manager : arena_manager_adapter {
+			std::vector<record>        allocated;
+			std::vector<std::uint32_t> valids;
+			std::vector<std::uint32_t> invalids;
+
+			using allocator_t =
+			    best_fit_arena_allocator<example_manager, std::uint32_t, true>;
+
+			void move_memory([[maybe_unused]] address       src,
+			                 [[maybe_unused]] address       dst,
+			                 [[maybe_unused]] std::uint32_t size,
+			                 [[maybe_unused]]
+			                 typename allocator_t::move_iterator iterator) {
+				std::uint32_t index;
+				while (iterator.has_next(index)) {
+					iterator.modify_offset(allocated[index].offset.offset);
+				}
+			}
+		};
+		example_manager manager;
 		using allocator_t =
-		    best_fit_arena_allocator<arena_manager_adapter, std::uint32_t,
-		                             k_compute_stats>;
-		allocator_t                                  allocator(150000);
+		    best_fit_arena_allocator<example_manager, std::uint32_t, true>;
+		allocator_t                                  allocator(150000, manager);
 		std::minstd_rand                             gen;
 		std::bernoulli_distribution                  dice(0.7);
-		std::uniform_int_distribution<std::uint32_t> generator(1, 100000);
+		std::uniform_int_distribution<std::uint32_t> generator(1, 10000);
 
-		struct record {
-			typename allocator_t::address offset;
-			size_type                     size;
-		};
-		std::vector<record> allocated;
-		for (std::uint32_t allocs = 0; allocs < 100000; ++allocs) {
-			if (dice(gen)) {
-				record r;
-				r.size   = generator(gen);
-				r.offset = allocator.allocate(r.size, 0,
-				                              dice(gen) ? allocator_t::f_defrag : 0);
-				allocated.push_back(r);
+		std::vector<record>& allocated = manager.allocated;
+		for (std::uint32_t allocs = 0; allocs < 10000; ++allocs) {
+			if (dice(gen) || manager.valids.size() == 0) {
+				record        r;
+				std::uint32_t handle = 0;
+
+				if (manager.invalids.size() > 0) {
+					handle = manager.invalids.back();
+					manager.invalids.pop_back();
+				} else {
+					handle = static_cast<std::uint32_t>(allocated.size());
+					allocated.resize(handle + 1);
+				}
+
+				r.size            = generator(gen);
+				r.offset          = allocator.allocate(r.size, handle,
+                                      dice(gen) ? allocator_t::f_defrag : 0);
+				allocated[handle] = r;
+				manager.valids.push_back(handle);
 				assert(allocator.validate());
 			} else {
 				std::uniform_int_distribution<std::uint32_t> choose(
-				    0, static_cast<std::uint32_t>(allocated.size() - 1));
+				    0, static_cast<std::uint32_t>(manager.valids.size() - 1));
 				std::uint32_t chosen = choose(gen);
-				allocator.deallocate(allocated[chosen].offset, allocated[chosen].size);
-				allocated.erase(allocated.begin() + chosen);
+				std::uint32_t handle = manager.valids[chosen];
+				auto&         rec    = allocated[handle];
+				allocator.deallocate(rec.offset, rec.size);
+				manager.valids.erase(manager.valids.begin() + chosen);
+				manager.invalids.push_back(handle);
 				assert(allocator.validate());
 			}
 		}
@@ -193,8 +252,10 @@ public:
 template <typename arena_manager, typename size_type, bool k_compute_stats>
 template <typename... Args>
 inline best_fit_arena_allocator<arena_manager, size_type, k_compute_stats>::
-    best_fit_arena_allocator(size_type i_arena_size, Args&&... i_args)
-    : statistics(std::forward<Args>(i_args)...), arena_size(i_arena_size) {}
+    best_fit_arena_allocator(size_type i_arena_size, arena_manager& i_manager,
+                             Args&&... i_args)
+    : statistics(std::forward<Args>(i_args)...), manager(i_manager),
+      arena_size(i_arena_size) {}
 
 template <typename arena_manager, typename size_type, bool k_compute_stats>
 inline typename best_fit_arena_allocator<arena_manager, size_type,
@@ -314,7 +375,7 @@ inline void best_fit_arena_allocator<arena_manager, size_type,
 		merges++;
 	}
 	if (arena.free_size == arena.total_size &&
-	    arena_manager::drop_arena(i_address.arena)) {
+	    manager.drop_arena(i_address.arena)) {
 		// drop arena?
 		if (left_removal.offset != k_invalid_offset) {
 			auto it = free_lookup(
@@ -330,9 +391,9 @@ inline void best_fit_arena_allocator<arena_manager, size_type,
 		}
 		free_size -= arena.total_size;
 		arena.total_size = 0;
-		arena.free_size  = 0;
+		arena.free_size  = free_pages;
 		arena.blocks.clear();
-		free_pages.push_back(i_address.arena);
+		free_pages = i_address.arena;
 		return;
 	}
 	if (merges > 0) {
@@ -420,7 +481,7 @@ inline void best_fit_arena_allocator<arena_manager, size_type,
 				auto          it          = node_list.begin() + occ;
 				auto          itEnd       = node_list.begin() + i;
 				move_iterator mv(it, itEnd, move_offset - last_offset);
-				arena_manager::move_memory({it->offset, p}, {last_offset, p}, size, mv);
+				manager.move_memory({it->offset, p}, {last_offset, p}, size, mv);
 
 				for (size_type cpy = occ, l = last; cpy < i; ++cpy) {
 					size_type size = node_list[cpy + 1].offset - node_list[cpy].offset;
@@ -477,9 +538,9 @@ inline size_type best_fit_arena_allocator<
 	statistics::report_new_arena();
 
 	size_type arena_num = static_cast<size_type>(arenas.size());
-	if (free_pages.size() > 0) {
-		arena_num = free_pages.back();
-		free_pages.pop_back();
+	if (free_pages != k_invalid_page) {
+		arena_num  = free_pages;
+		free_pages = arenas[free_pages].next_free;
 	} else
 		arenas.push_back(arena());
 
@@ -496,7 +557,7 @@ inline size_type best_fit_arena_allocator<
 		arena.free_size = 0;
 	}
 	node_list.push_back({i_arena_size, k_invalid_handle});
-	arena_manager::add_arena(arena_num, i_arena_size);
+	manager.add_arena(arena_num, i_arena_size);
 	return arena_num;
 }
 
