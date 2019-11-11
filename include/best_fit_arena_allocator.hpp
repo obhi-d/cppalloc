@@ -4,12 +4,31 @@
 
 namespace cppalloc {
 
+struct arena_manager_adapter {
+	struct address {
+		std::uint32_t offset;
+		std::uint32_t page;
+	};
+	static bool drop_arena([[maybe_unused]] std::uint32_t id) { return true; }
+	static void add_arena([[maybe_unused]] std::uint32_t id,
+	                      [[maybe_unused]] std::uint32_t size) {}
+	template <typename iter_type>
+	static void move_memory([[maybe_unused]] address       src,
+	                        [[maybe_unused]] address       dst,
+	                        [[maybe_unused]] std::uint32_t size,
+	                        [[maybe_unused]] iter_type     iterator) {}
+};
+
+struct best_fit_arena_allocator_tag {};
+
 //! @remarks Class represents an allocator
+
 template <typename arena_manager, typename size_type = std::uint32_t,
           bool k_compute_stats = false>
-class best_fit_arena_allocator : detail::statistics<k_compute_stats>,
-                                 public arena_manager {
-	using statistics = detail::statistics<k_compute_stats>;
+class best_fit_arena_allocator
+    : detail::statistics<best_fit_arena_allocator_tag, k_compute_stats,
+                         arena_manager>  {
+	using statistics = detail::statistics<best_fit_arena_allocator_tag, k_compute_stats, arena_manager>;
 
 public:
 	enum : size_type {
@@ -40,7 +59,7 @@ private:
 
 	using block_list    = std::vector<block_type>;
 	using block_list_it = typename block_list::iterator;
-	bool      is_valid() const;
+	bool      validate() const;
 	size_type add_arena(size_type i_user_handle, size_type i_arena_size);
 
 public:
@@ -57,11 +76,9 @@ public:
 
 	//! Helpers
 	size_type get_free_size() const;
-	size_type get_max_free_block_size() const const;
+	size_type get_max_free_block_size() const;
 	void      defragment();
 	float     get_fragmentation();
-
-	static void unit_test();
 
 	class move_iterator {
 		using iterator = block_list_it;
@@ -137,13 +154,47 @@ private:
 	std::vector<size_type> free_pages;
 	size_type              free_size = 0;
 	size_type              arena_size;
+
+public:
+	static void unit_test() {
+		using allocator_t =
+		    best_fit_arena_allocator<arena_manager_adapter, std::uint32_t,
+		                             k_compute_stats>;
+		allocator_t                                  allocator(150000);
+		std::minstd_rand                             gen;
+		std::bernoulli_distribution                  dice(0.7);
+		std::uniform_int_distribution<std::uint32_t> generator(1, 100000);
+
+		struct record {
+			typename allocator_t::address offset;
+			size_type                     size;
+		};
+		std::vector<record> allocated;
+		for (std::uint32_t allocs = 0; allocs < 100000; ++allocs) {
+			if (dice(gen)) {
+				record r;
+				r.size   = generator(gen);
+				r.offset = allocator.allocate(r.size, 0,
+				                              dice(gen) ? allocator_t::f_defrag : 0);
+				allocated.push_back(r);
+				assert(allocator.validate());
+			} else {
+				std::uniform_int_distribution<std::uint32_t> choose(
+				    0, static_cast<std::uint32_t>(allocated.size() - 1));
+				std::uint32_t chosen = choose(gen);
+				allocator.deallocate(allocated[chosen].offset, allocated[chosen].size);
+				allocated.erase(allocated.begin() + chosen);
+				assert(allocator.validate());
+			}
+		}
+	}
 };
 
 template <typename arena_manager, typename size_type, bool k_compute_stats>
 template <typename... Args>
 inline best_fit_arena_allocator<arena_manager, size_type, k_compute_stats>::
     best_fit_arena_allocator(size_type i_arena_size, Args&&... i_args)
-    : arena_manager(std::forward<Args>(i_args)...), arena_size(i_arena_size) {}
+    : statistics(std::forward<Args>(i_args)...), arena_size(i_arena_size) {}
 
 template <typename arena_manager, typename size_type, bool k_compute_stats>
 inline typename best_fit_arena_allocator<arena_manager, size_type,
@@ -466,7 +517,7 @@ inline float best_fit_arena_allocator<arena_manager, size_type,
 
 template <typename arena_manager, typename size_type, bool k_compute_stats>
 inline bool best_fit_arena_allocator<arena_manager, size_type,
-                                     k_compute_stats>::is_valid() const {
+                                     k_compute_stats>::validate() const {
 	size_type computed_size = 0;
 
 	for (size_type i = 0; i < free_list.size(); ++i) {

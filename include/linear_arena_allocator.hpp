@@ -3,12 +3,16 @@
 #include <linear_allocator.hpp>
 
 namespace cppalloc {
+
+struct linear_arena_allocator_tag {};
+
 template <typename underlying_allocator = cppalloc::default_allocator<>,
           bool k_compute_stats          = false>
-class linear_arena_allocator : underlying_allocator,
-                               detail::statistics<k_compute_stats> {
+class linear_arena_allocator : 
+      public detail::statistics<linear_arena_allocator_tag, k_compute_stats,
+                                underlying_allocator> {
 public:
-	using statistics = detail::statistics<k_compute_stats>;
+	using statistics = detail::statistics<linear_arena_allocator_tag, k_compute_stats, underlying_allocator>;
 	using size_type  = typename underlying_allocator::size_type;
 	using address    = typename underlying_allocator::address;
 	enum : size_type {
@@ -19,7 +23,7 @@ public:
 	template <typename... Args>
 	linear_arena_allocator(size_type i_arena_size, Args&&... i_args)
 	    : k_arena_size(i_arena_size),
-	      underlying_allocator(std::forward<Args>(i_args)...) {
+	      statistics(std::forward<Args>(i_args)...) {
 		// Initializing the cursor is important for the
 		// allocate loop to work.
 		current_arena = allocate_new_arena(k_arena_size);
@@ -62,8 +66,6 @@ public:
 		}
 	}
 
-  static void unit_test();
-  
 private:
 	struct arena {
 		address   buffer;
@@ -96,6 +98,32 @@ private:
 	size_type          current_arena;
 
 	const size_type k_arena_size;
+
+public:
+	static void unit_test() {
+		using allocator_t =
+		    linear_arena_allocator<aligned_allocator<16, std::uint32_t, true>,
+		                           true>;
+		struct record {
+			void*         data;
+			std::uint32_t size;
+		};
+		constexpr std::uint32_t k_arena_size = 1000;
+		allocator_t             allocator(k_arena_size);
+		auto start  = cppalloc::allocate<std::uint8_t*>(allocator, 40);
+		auto off100 = cppalloc::allocate<std::uint8_t*>(allocator, 100);
+		assert(start + 40 == off100);
+		allocator.deallocate(off100, 100);
+		off100 = cppalloc::allocate<std::uint8_t*>(allocator, 100);
+		assert(start + 40 == off100);
+		auto new_arena = cppalloc::allocate<std::uint8_t*>(allocator, 1000);
+		assert(2 == allocator.get_arenas_allocated());
+		auto from_old = cppalloc::allocate<std::uint8_t*>(allocator, 40);
+		assert(off100 + 100 == from_old);
+		allocator.deallocate(new_arena, 1000);
+		new_arena = cppalloc::allocate<std::uint8_t*>(allocator, 1000);
+		assert(2 == allocator.get_arenas_allocated());
+	}
 };
 
 } // namespace cppalloc

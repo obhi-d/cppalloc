@@ -13,16 +13,19 @@ struct ordering_type {
 };
 
 } // namespace detail
+struct best_fit_allocator_tag {};
 
 template <typename size_type = std::uint32_t, const bool k_growable = true,
           bool k_compute_stats = false>
-class best_fit_allocator : detail::statistics<k_compute_stats> {
-	using statistics = detail::statistics<k_compute_stats>;
+class best_fit_allocator
+    : detail::statistics<best_fit_allocator_tag, k_compute_stats> {
+	using statistics = detail::statistics<best_fit_allocator_tag, k_compute_stats>;
+
 public:
 	enum {
 		k_invalid_offset = std::numeric_limits<size_type>::max(),
 	};
-	using address    = size_type;
+	using address = size_type;
 
 	best_fit_allocator() { statistics::report_new_arena(); };
 
@@ -48,12 +51,12 @@ private:
 		size_type offset = 0;
 		size_type size   = 0;
 
-		ordering_type orderings[k_count];
+		ordering_type orderings[ordering_by::k_count];
 
 		inline size_type next_offset() const { return offset + size; }
 	};
 
-	using ordering_lists_array = std::array<list_type, k_count>;
+	using ordering_lists_array = std::array<list_type, ordering_by::k_count>;
 
 	template <ordering_by i_order>
 	inline ordering_type& order(std::uint32_t i_index);
@@ -156,13 +159,12 @@ private:
 		}
 
 		inline std::uint32_t get_raw() const { return index; }
-		best_fit_allocator<size_type, k_growable, k_compute_stats, k_compute_stats>&
-		              owner;
-		std::uint32_t index = k_null;
+		best_fit_allocator<size_type, k_growable, k_compute_stats>& owner;
+		std::uint32_t                                               index = k_null;
 	};
 
 	using free_iterator    = iterator<ordering_by::e_size>;
-	using OccupiedIterator = iterator<ordering_by::e_offset>;
+	using occupied_iterator = iterator<ordering_by::e_offset>;
 
 	inline block_type&       get_block(std::uint32_t i_loc);
 	inline const block_type& get_block(std::uint32_t i_loc) const;
@@ -450,7 +452,7 @@ template <typename size_type, bool k_growable, bool k_compute_stats>
 inline void best_fit_allocator<size_type, k_growable,
                                k_compute_stats>::deallocate(address   i_offset,
                                                             size_type i_size) {
-	
+
 	auto measure = statistics::report_deallocate(i_size);
 
 	auto begin_it = begin<ordering_by::e_offset>();
@@ -571,7 +573,7 @@ inline void best_fit_allocator<size_type, k_growable,
 			assert(allocator.validate());
 		} else {
 			std::uniform_int_distribution<std::uint32_t> choose(0,
-			                                                    allocated.size() - 1);
+			                                                    static_cast<std::uint32_t>(allocated.size() - 1));
 			std::uint32_t                                chosen = choose(gen);
 			allocator.deallocate(allocated[chosen].offset, allocated[chosen].size);
 			allocated.erase(allocated.begin() + chosen);
@@ -582,29 +584,25 @@ inline void best_fit_allocator<size_type, k_growable,
 
 template <typename size_type, bool k_growable, bool k_compute_stats>
 template <detail::ordering_by i_order>
-inline best_fit_allocator<size_type, k_growable, k_compute_stats>::
-    template iterator<i_order>::iterator(const iterator<i_order>& i_other)
+inline best_fit_allocator<size_type, k_growable, k_compute_stats>::iterator<i_order>::iterator(const iterator<i_order>& i_other)
     : owner(i_other.owner), index(i_other.index) {}
 
 template <typename size_type, bool k_growable, bool k_compute_stats>
 template <detail::ordering_by i_order>
-inline best_fit_allocator<size_type, k_growable, k_compute_stats>::
-    template iterator<i_order>::iterator(iterator&& i_other)
+inline best_fit_allocator<size_type, k_growable, k_compute_stats>::iterator<i_order>::iterator(iterator&& i_other)
     : owner(i_other.owner), index(i_other.index) {
 	i_other.index = k_null;
 }
 
 template <typename size_type, bool k_growable, bool k_compute_stats>
 template <detail::ordering_by i_order>
-inline best_fit_allocator<size_type, k_growable, k_compute_stats>::
-    template iterator<i_order>::iterator(
+inline best_fit_allocator<size_type, k_growable, k_compute_stats>::iterator<i_order>::iterator(
         best_fit_allocator<size_type, k_growable, k_compute_stats>& i_other)
     : owner(i_other), index(k_null) {}
 
 template <typename size_type, bool k_growable, bool k_compute_stats>
 template <detail::ordering_by i_order>
-inline best_fit_allocator<size_type, k_growable, k_compute_stats>::
-    template iterator<i_order>::iterator(
+inline best_fit_allocator<size_type, k_growable, k_compute_stats>::iterator<i_order>::iterator(
         best_fit_allocator<size_type, k_growable, k_compute_stats>& i_other,
         std::uint32_t                                               i_loc)
     : owner(i_other), index(i_loc) {}
