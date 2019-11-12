@@ -23,15 +23,16 @@ struct default_allocator
 	}
 };
 
+template <std::uint32_t k_alignment>
 struct aligned_allocator_tag {};
 
 template <std::uint32_t k_alignment, typename size_ty = std::uint32_t,
           bool          k_compute_stats = false>
 struct aligned_allocator
-    : detail::statistics<aligned_allocator_tag, k_compute_stats> {
+    : detail::statistics<aligned_allocator_tag<k_alignment>, k_compute_stats> {
 	using address    = void*;
 	using size_type  = size_ty;
-	using statistics = detail::statistics<aligned_allocator_tag, k_compute_stats>;
+	using statistics = detail::statistics<aligned_allocator_tag<k_alignment>, k_compute_stats>;
 
 	address allocate(size_type i_sz) {
 		auto measure = statistics::report_allocate(i_sz);

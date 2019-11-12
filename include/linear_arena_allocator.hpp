@@ -8,27 +8,25 @@ struct linear_arena_allocator_tag {};
 
 template <typename underlying_allocator = cppalloc::default_allocator<>,
           bool k_compute_stats          = false>
-class linear_arena_allocator : 
-      public detail::statistics<linear_arena_allocator_tag, k_compute_stats,
+class linear_arena_allocator
+    : public detail::statistics<linear_arena_allocator_tag, k_compute_stats,
                                 underlying_allocator> {
 public:
-	using statistics = detail::statistics<linear_arena_allocator_tag, k_compute_stats, underlying_allocator>;
+	using statistics = detail::statistics<linear_arena_allocator_tag,
+	                                      k_compute_stats, underlying_allocator>;
 	using size_type  = typename underlying_allocator::size_type;
 	using address    = typename underlying_allocator::address;
-	enum : size_type {
-		k_minimum_size =
-		    static_cast<size_type>(64)
-	};
+	enum : size_type { k_minimum_size = static_cast<size_type>(64) };
 
 	template <typename... Args>
 	linear_arena_allocator(size_type i_arena_size, Args&&... i_args)
-	    : k_arena_size(i_arena_size),
-	      statistics(std::forward<Args>(i_args)...), current_arena(0) {
+	    : k_arena_size(i_arena_size), statistics(std::forward<Args>(i_args)...),
+	      current_arena(0) {
 		// Initializing the cursor is important for the
 		// allocate loop to work.
 	}
 	~linear_arena_allocator() {
-		for(auto& arena : arenas) {
+		for (auto& arena : arenas) {
 			underlying_allocator::deallocate(arena.buffer, arena.arena_size);
 		}
 	}
@@ -38,9 +36,9 @@ public:
 		auto measure = statistics::report_allocate(i_size);
 
 		for (size_type index = current_arena,
-		               end = static_cast<size_type>(arenas.size());
+		               end   = static_cast<size_type>(arenas.size());
 		     index < end; ++index) {
-			
+
 			if (arenas[index].left_over >= i_size)
 				return allocate_from(index, i_size);
 			else {
