@@ -27,6 +27,11 @@ public:
 		// Initializing the cursor is important for the
 		// allocate loop to work.
 	}
+	~linear_arena_allocator() {
+		for(auto& arena : arenas) {
+			underlying_allocator::deallocate(arena.buffer, arena.arena_size);
+		}
+	}
 
 	address allocate(size_type i_size) {
 

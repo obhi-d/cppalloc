@@ -42,7 +42,7 @@ struct aligned_allocator
 #endif
 	}
 	void deallocate(address i_addr, size_type i_sz) {
-		auto measure = statistics::report_allocate(i_sz);
+		auto measure = statistics::report_deallocate(i_sz);
 #ifdef _MSC_VER
 		_aligned_free(i_addr);
 #else
