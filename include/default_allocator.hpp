@@ -18,11 +18,11 @@ struct default_allocator
 	using tracker = detail::memory_tracker<size_ty, stack_tracer, output_stream, k_track_memory>;
 
 	default_allocator() { statistics::report_new_arena(); }
-	address allocate(size_type i_sz) {
+	static address allocate(size_type i_sz) {
 		auto measure = statistics::report_allocate(i_sz);
 		return tracker::when_allocate(std::malloc(i_sz), i_sz);
 	}
-	void deallocate(address i_addr, size_type i_sz) {
+	static void deallocate(address i_addr, size_type i_sz) {
 		auto measure = statistics::report_deallocate(i_sz);
 		std::free(tracker::when_deallocate(i_addr, i_sz));
 	}
@@ -44,7 +44,7 @@ struct aligned_allocator
 	    detail::statistics<aligned_allocator_tag<k_alignment>, k_compute_stats>;
 	using tracker = detail::memory_tracker<size_ty, stack_tracer, output_stream, k_track_memory>;
 
-	address allocate(size_type i_sz) {
+	static address allocate(size_type i_sz) {
 		auto measure = statistics::report_allocate(i_sz);
 #ifdef _MSC_VER
 		return tracker::when_allocate(_aligned_malloc(i_sz, k_alignment), i_sz);
@@ -52,7 +52,7 @@ struct aligned_allocator
 		return tracker::when_allocate(aligned_alloc(k_alignment, i_sz), i_sz);
 #endif
 	}
-	void deallocate(address i_addr, size_type i_sz) {
+	static void deallocate(address i_addr, size_type i_sz) {
 		auto measure = statistics::report_deallocate(i_sz);
 #ifdef _MSC_VER
 		_aligned_free(tracker::when_deallocate(i_addr, i_sz));
