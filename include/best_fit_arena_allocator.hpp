@@ -295,8 +295,8 @@ best_fit_arena_allocator<arena_manager, size_type, k_compute_stats>::allocate(
 	size_type arena_num = found->arena;
 	auto&     arena     = arenas[arena_num];
 	auto&     node_list = arena.blocks;
-	auto      alEnd     = node_list.end();
-	auto      it = std::lower_bound(node_list.begin(), alEnd, (*found).offset,
+	auto      al_end    = node_list.end();
+	auto      it = std::lower_bound(node_list.begin(), al_end, (*found).offset,
                              [](block_type block, size_type offset) -> bool {
                                return block.offset < offset;
                              });
@@ -304,7 +304,7 @@ best_fit_arena_allocator<arena_manager, size_type, k_compute_stats>::allocate(
 	// set allocated to right size, increment it
 	it->id = i_user_handle;
 	if (found->size > 0) {
-		size_type numAllocCount = static_cast<size_type>(node_list.size());
+		size_type num_allocated = static_cast<size_type>(node_list.size());
 		// reinsert the left-over size in free list
 		found->offset += i_size;
 		size_type offset = found->offset;
@@ -433,9 +433,9 @@ inline void best_fit_arena_allocator<arena_manager, size_type,
 		std::memmove(dst, src, count);
 		node_list.resize(node_list.size() - merges);
 	} else {
-		free_block_type newBlock{i_address.arena, i_address.offset, size};
-		auto found = free_lookup(free_list.begin(), free_list.end(), newBlock);
-		free_list.emplace(found, newBlock);
+		free_block_type new_block{i_address.arena, i_address.offset, size};
+		auto found = free_lookup(free_list.begin(), free_list.end(), new_block);
+		free_list.emplace(found, new_block);
 		node->id = k_invalid_handle;
 	}
 }
@@ -479,8 +479,8 @@ inline void best_fit_arena_allocator<arena_manager, size_type,
 				size_type     last_offset = node_list[last].offset;
 				size_type     size        = cur_offset - move_offset;
 				auto          it          = node_list.begin() + occ;
-				auto          itEnd       = node_list.begin() + i;
-				move_iterator mv(it, itEnd, move_offset - last_offset);
+				auto          it_end      = node_list.begin() + i;
+				move_iterator mv(it, it_end, move_offset - last_offset);
 				manager.move_memory({it->offset, p}, {last_offset, p}, size, mv);
 
 				for (size_type cpy = occ, l = last; cpy < i; ++cpy) {
@@ -510,14 +510,14 @@ inline void best_fit_arena_allocator<arena_manager, size_type,
 				node_list[last].id = k_invalid_handle;
 				node_list.push_back({arena_size, k_invalid_handle});
 			} else {
-				removed_size        = node_list[occ].offset - node_list[last].offset;
-				new_free.size       = removed_size;
-				node_list[last].id  = k_invalid_handle;
-				auto      data      = node_list.data();
-				size_type numToMove = static_cast<size_type>(node_list.size() - occ);
+				removed_size          = node_list[occ].offset - node_list[last].offset;
+				new_free.size         = removed_size;
+				node_list[last].id    = k_invalid_handle;
+				auto      data        = node_list.data();
+				size_type num_to_move = static_cast<size_type>(node_list.size() - occ);
 				std::memmove(data + last + 1, data + occ,
-				             (numToMove) * sizeof(block_type));
-				node_list.resize(numToMove + last +
+				             (num_to_move) * sizeof(block_type));
+				node_list.resize(num_to_move + last +
 				                 1); // because size = node_list.size - (occ - last)
 			}
 			new_free_list.push_back(new_free);

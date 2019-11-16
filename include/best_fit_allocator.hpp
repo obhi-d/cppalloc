@@ -490,8 +490,8 @@ inline void best_fit_allocator<size_type, k_growable,
 		// merge this + node
 		node->offset = i_offset;
 		node->size += i_size;
-		free_iterator nodeFLI(*this, node.get_raw());
-		reinsert_right(nodeFLI);
+		free_iterator node_fli(*this, node.get_raw());
+		reinsert_right(node_fli);
 	} else {
 		// new node
 		auto          begin_it   = begin<ordering_by::e_size>();
@@ -514,12 +514,12 @@ inline bool best_fit_allocator<size_type, k_growable,
 	                  ordering_by i_order) -> bool {
 		return (second.orderings[i_order].prev == first);
 	};
-	auto sizeIt  = begin<ordering_by::e_size>();
-	auto sizeEnd = prev(end<ordering_by::e_size>());
-	while (sizeIt != sizeEnd) {
-		std::uint32_t     raw = sizeIt.get_raw();
-		const block_type& it  = *sizeIt;
-		const block_type& nx  = *(++sizeIt);
+	auto size_iter = begin<ordering_by::e_size>();
+	auto size_end  = prev(end<ordering_by::e_size>());
+	while (size_iter != size_end) {
+		std::uint32_t     raw = size_iter.get_raw();
+		const block_type& it  = *size_iter;
+		const block_type& nx  = *(++size_iter);
 
 		if (!ordered(raw, nx, ordering_by::e_size)) {
 			assert(false);
@@ -535,12 +535,12 @@ inline bool best_fit_allocator<size_type, k_growable,
 		}
 	}
 
-	auto offsetIt  = begin<ordering_by::e_offset>();
-	auto offsetEnd = prev(end<ordering_by::e_offset>());
-	while (offsetIt != offsetEnd) {
-		std::uint32_t     raw    = offsetIt.get_raw();
-		const block_type& it     = *offsetIt;
-		const block_type& nx     = *(++offsetIt);
+	auto offset_it  = begin<ordering_by::e_offset>();
+	auto offset_end = prev(end<ordering_by::e_offset>());
+	while (offset_it != offset_end) {
+		std::uint32_t     raw    = offset_it.get_raw();
+		const block_type& it     = *offset_it;
+		const block_type& nx     = *(++offset_it);
 		size_type         offset = it.offset;
 		size_type         next   = nx.offset;
 
