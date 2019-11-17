@@ -1,5 +1,6 @@
-#define CPPALLOC_EXPORT_ENTRY
+
 #include <cppalloc.hpp>
+#include <cppalloc_export_debug.hxx>
 #include <exception>
 #include <iostream>
 #include <vector>

@@ -38,13 +38,6 @@ template <> struct aligned_alloc_statistics<true> {
 	CPPALLOC_API static detail::statistics<aligned_allocator_tag, true> instance;
 };
 
-#ifdef CPPALLOC_EXPORT_ENTRY
-detail::statistics<default_allocator_tag, true>
-    default_alloc_statistics<true>::instance;
-detail::statistics<aligned_allocator_tag, true>
-    aligned_alloc_statistics<true>::instance;
-#endif
-
 } // namespace detail
 
 template <typename size_ty = std::uint32_t, bool k_compute_stats = false,
