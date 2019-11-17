@@ -5,6 +5,7 @@
 #include "linear_allocator.hpp"
 #include "linear_arena_allocator.hpp"
 #include "pool_allocator.hpp"
+#include "std_allocator_wrapper.hpp"
 
 namespace cppalloc {
 

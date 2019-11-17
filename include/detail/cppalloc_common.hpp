@@ -20,6 +20,25 @@
 #ifdef _MSC_VER
 #include <malloc.h>
 #endif
+
+#if defined(_MSC_VER)
+#define CPPALLOC_EXPORT __declspec(dllexport)
+#define CPPALLOC_IMPORT __declspec(dllimport)
+#else
+#define CPPALLOC_EXPORT __attribute__((visibility("default")))
+#define CPPALLOC_IMPORT __attribute__((visibility("default")))
+#endif
+
+#ifdef CPPALLOC_DLL_IMPL
+#ifdef CPPALLOC_EXPORT_SYMBOLS
+#define CPPALLOC_API CPPALLOC_EXPORT
+#else
+#define CPPALLOC_API CPPALLOC_IMPORT
+#endif
+#else
+#define CPPALLOC_API
+#endif
+
 namespace cppalloc {
 namespace detail {
 
@@ -72,7 +91,8 @@ struct statistics : public base_t {
 	~statistics() {
 
 		if (k_print) {
-			std::cout << "\n[INFO] Stats for: " << cppalloc::type_name<tag>() << std::endl;
+			std::cout << "\n[INFO] Stats for: " << cppalloc::type_name<tag>()
+			          << std::endl;
 			std::cout << "[INFO] Arenas allocated: " << arenas_allocated << std::endl;
 			std::cout << "[INFO] Peak allocation: " << peak_allocation << std::endl;
 			std::cout << "[INFO] Final allocation: " << allocation << std::endl;
@@ -104,7 +124,8 @@ struct statistics : public base_t {
 		allocation += size;
 		peak_allocation = std::max<std::size_t>(allocation, peak_allocation);
 		return timer_t::scoped(allocation_timing);
-	}[[nodiscard]] timer_t::scoped report_deallocate(std::size_t size) {
+	}
+	[[nodiscard]] timer_t::scoped report_deallocate(std::size_t size) {
 		deallocation_count++;
 		allocation -= size;
 		return timer_t::scoped(deallocation_timing);
@@ -119,13 +140,13 @@ struct statistics<tag, false, base_t, k_print> : public base_t {
 	template <typename... Args>
 	statistics(Args&&... i_args) : base_t(std::forward<Args>(i_args)...) {}
 
-	std::false_type report_new_arena(std::uint32_t count = 1) {
+	static std::false_type report_new_arena(std::uint32_t count = 1) {
 		return std::false_type{};
 	}
-	std::false_type report_allocate(std::size_t size) {
+	static std::false_type report_allocate(std::size_t size) {
 		return std::false_type{};
 	}
-	std::false_type report_deallocate(std::size_t size) {
+	static std::false_type report_deallocate(std::size_t size) {
 		return std::false_type{};
 	}
 
