@@ -26,7 +26,7 @@
 #include <cassert>
 #include <cstddef>
 
-namespace lumiere {
+namespace cppalloc {
 template <std::size_t N, std::size_t alignment = alignof(std::max_align_t)>
 class arena {
 	alignas(alignment) char buf_[N];
@@ -42,8 +42,8 @@ public:
 	void deallocate(char* p, std::size_t n) noexcept;
 
 	static constexpr std::size_t size() noexcept { return N; }
-	std::size_t used() const noexcept {
-		return static_cast<std::size_t>(ptr_ - buf_);
+	std::size_t                  used() const noexcept {
+    return static_cast<std::size_t>(ptr_ - buf_);
 	}
 	void reset() noexcept { ptr_ = buf_; }
 
@@ -61,7 +61,7 @@ template <std::size_t N, std::size_t alignment>
 template <std::size_t ReqAlign>
 char* arena<N, alignment>::allocate(std::size_t n) {
 	static_assert(ReqAlign <= alignment, "alignment is too small for this arena");
-	assert(pointer_in_buffer(ptr_) && "short_alloc has outlived arena");
+	assert(pointer_in_buffer(ptr_) && "std_short_alloc has outlived arena");
 	auto const aligned_n = align_up(n);
 	if (static_cast<decltype(aligned_n)>(buf_ + N - ptr_) >= aligned_n) {
 		char* r = ptr_;
@@ -78,7 +78,7 @@ char* arena<N, alignment>::allocate(std::size_t n) {
 
 template <std::size_t N, std::size_t alignment>
 void arena<N, alignment>::deallocate(char* p, std::size_t n) noexcept {
-	assert(pointer_in_buffer(ptr_) && "short_alloc has outlived arena");
+	assert(pointer_in_buffer(ptr_) && "std_short_alloc has outlived arena");
 	if (pointer_in_buffer(p)) {
 		n = align_up(n);
 		if (p + n == ptr_)
@@ -88,29 +88,30 @@ void arena<N, alignment>::deallocate(char* p, std::size_t n) noexcept {
 }
 
 template <class T, std::size_t N, std::size_t Align = alignof(std::max_align_t)>
-class short_alloc {
+class std_short_alloc {
 public:
-	using value_type = T;
+	using value_type                = T;
 	static auto constexpr alignment = Align;
-	static auto constexpr size = N;
-	using arena_type = arena<size, alignment>;
+	static auto constexpr size      = N;
+	using arena_type                = arena<size, alignment>;
 
 private:
 	arena_type& a_;
 
 public:
-	short_alloc(const short_alloc&) = default;
-	short_alloc& operator=(const short_alloc&) = delete;
+	std_short_alloc(const std_short_alloc&) = default;
+	std_short_alloc& operator=(const std_short_alloc&) = delete;
 
-	short_alloc(arena_type& a) noexcept : a_(a) {
+	std_short_alloc(arena_type& a) noexcept : a_(a) {
 		static_assert(size % alignment == 0,
 		              "size N needs to be a multiple of alignment Align");
 	}
 	template <class U>
-	short_alloc(const short_alloc<U, N, alignment>& a) noexcept : a_(a.a_) {}
+	std_short_alloc(const std_short_alloc<U, N, alignment>& a) noexcept
+	    : a_(a.a_) {}
 
 	template <class _Up> struct rebind {
-		using other = short_alloc<_Up, N, alignment>;
+		using other = std_short_alloc<_Up, N, alignment>;
 	};
 
 	T* allocate(std::size_t n) {
@@ -123,24 +124,24 @@ public:
 
 	template <class T1, std::size_t N1, std::size_t A1, class U, std::size_t M,
 	          std::size_t A2>
-	friend bool operator==(const short_alloc<T1, N1, A1>& x,
-	                       const short_alloc<U, M, A2>& y) noexcept;
+	friend bool operator==(const std_short_alloc<T1, N1, A1>& x,
+	                       const std_short_alloc<U, M, A2>&   y) noexcept;
 
-	template <class U, std::size_t M, std::size_t A> friend class short_alloc;
+	template <class U, std::size_t M, std::size_t A> friend class std_short_alloc;
 };
 
 template <class T, std::size_t N, std::size_t A1, class U, std::size_t M,
           std::size_t A2>
-inline bool operator==(const short_alloc<T, N, A1>& x,
-                       const short_alloc<U, M, A2>& y) noexcept {
+inline bool operator==(const std_short_alloc<T, N, A1>& x,
+                       const std_short_alloc<U, M, A2>& y) noexcept {
 	return N == M && A1 == A2 && &x.a_ == &y.a_;
 }
 
 template <class T, std::size_t N, std::size_t A1, class U, std::size_t M,
           std::size_t A2>
-inline bool operator!=(const short_alloc<T, N, A1>& x,
-                       const short_alloc<U, M, A2>& y) noexcept {
+inline bool operator!=(const std_short_alloc<T, N, A1>& x,
+                       const std_short_alloc<U, M, A2>& y) noexcept {
 	return !(x == y);
 }
-} // namespace lumiere
+} // namespace cppalloc
 #endif // SHORT_ALLOC_H
