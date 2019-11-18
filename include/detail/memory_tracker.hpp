@@ -1,4 +1,3 @@
-
 #pragma once
 #include <cstdint>
 #include <cstring>
@@ -10,7 +9,6 @@
 
 namespace cppalloc {
 namespace detail {
-
 template <typename size_type, typename stack_tracer, typename out_stream,
           bool enabled = false>
 struct memory_tracker {
@@ -24,9 +22,9 @@ struct memory_tracker {
 
 template <typename size_type, typename stack_tracer, typename out_stream>
 struct CPPALLOC_API memory_tracker<size_type, stack_tracer, out_stream, true> {
-
 	using backtrace = typename stack_tracer;
-	memory_tracker& get_instance();
+
+	static memory_tracker& get_instance();
 	~memory_tracker();
 
 	void when_allocate_(void* i_data, size_type i_size);
@@ -50,6 +48,5 @@ struct CPPALLOC_API memory_tracker<size_type, stack_tracer, out_stream, true> {
 	std::size_t memory_counter = 0;
 	std::mutex  lock;
 };
-
 } // namespace detail
 } // namespace cppalloc
