@@ -7,6 +7,11 @@ namespace cppalloc {
 struct default_allocator_tag {};
 struct aligned_allocator_tag {};
 
+namespace traits {
+template <> constexpr bool is_static_v<default_allocator_tag> = true;
+template <> constexpr bool is_static_v<aligned_allocator_tag> = true;
+} // namespace traits
+
 namespace detail {
 template <bool k_compute = false> struct default_alloc_statistics {
 	static int report_allocate(std::size_t) { return 0; }
@@ -47,6 +52,7 @@ struct default_allocator
     : detail::default_alloc_statistics<k_compute_stats>,
       detail::memory_tracker<size_ty, stack_tracer, output_stream,
                              k_track_memory> {
+	using tag        = default_allocator_tag;
 	using address    = void*;
 	using size_type  = size_ty;
 	using statistics = detail::default_alloc_statistics<k_compute_stats>;
@@ -73,8 +79,10 @@ struct aligned_allocator
     : detail::aligned_alloc_statistics<k_compute_stats>,
       detail::memory_tracker<size_ty, stack_tracer, output_stream,
                              k_track_memory> {
-	using address   = void*;
-	using size_type = size_ty;
+
+	using tag        = aligned_allocator_tag;
+	using address    = void*;
+	using size_type  = size_ty;
 	using statistics = detail::aligned_alloc_statistics<k_compute_stats>;
 	using tracker = detail::memory_tracker<size_ty, stack_tracer, output_stream,
 	                                       k_track_memory>;

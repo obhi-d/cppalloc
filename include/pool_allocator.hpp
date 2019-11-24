@@ -11,6 +11,7 @@ template <typename underlying_allocator = cppalloc::default_allocator<>,
 class pool_allocator : detail::statistics<pool_allocator_tag, k_compute_stats,
                                           underlying_allocator> {
 public:
+	using tag = pool_allocator_tag;
 	using statistics = detail::statistics<pool_allocator_tag, k_compute_stats,
 	                                      underlying_allocator>;
 	using size_type  = typename underlying_allocator::size_type;

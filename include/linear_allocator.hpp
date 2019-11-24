@@ -13,6 +13,7 @@ class linear_allocator
     : detail::statistics<linear_allocator_tag, k_compute_stats,
                          underlying_allocator> {
 public:
+	using tag = linear_allocator_tag;
 	using statistics = detail::statistics<linear_allocator_tag, k_compute_stats,
 	                                      underlying_allocator>;
 	using size_type  = typename underlying_allocator::size_type;

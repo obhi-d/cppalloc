@@ -26,6 +26,7 @@ public:
 	enum {
 		k_invalid_offset = std::numeric_limits<size_type>::max(),
 	};
+	using tag = best_fit_allocator_tag;
 	using address = size_type;
 
 	best_fit_allocator() { statistics::report_new_arena(); };

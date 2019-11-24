@@ -40,6 +40,22 @@
 #endif
 
 namespace cppalloc {
+namespace traits {
+
+template <typename underlying_allocator_tag> constexpr bool is_static_v = false;
+template <typename underlying_allocator_tag>
+constexpr bool is_memory_allocator_v = true;
+
+template <typename ua_t, class = std::void_t<>> struct tag {
+	using type = void;
+};
+template <typename ua_t> struct tag<ua_t, std::void_t<typename ua_t::tag>> {
+	using type = typename ua_t::tag;
+};
+
+template <typename ua_t> using tag_t = typename tag<ua_t>::type;
+
+} // namespace traits
 namespace detail {
 
 struct timer_t {

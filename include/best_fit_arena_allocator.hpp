@@ -33,24 +33,32 @@ struct arena_manager_adapter {
 	                        [[maybe_unused]] iter_type     iterator) {}
 };
 
-template <typename size_type> struct best_fit_arena_allocator_tag {
-	struct address {
-		size_type offset;
-		size_type arena;
-	};
+struct best_fit_arena_allocator_tag {
 };
+
+namespace detail {
+
+template <typename i_size_type> struct bf_address_type {
+	i_size_type offset;
+	i_size_type arena;
+};
+
+}
 
 //! @remarks Class represents an allocator
 
 template <typename arena_manager, typename size_type = std::uint32_t,
           bool k_compute_stats = false>
 class best_fit_arena_allocator
-    : public detail::statistics<best_fit_arena_allocator_tag<size_type>,
+    : public detail::statistics<best_fit_arena_allocator_tag,
                                 k_compute_stats> {
-	using statistics = detail::statistics<best_fit_arena_allocator_tag<size_type>,
+	using statistics = detail::statistics<best_fit_arena_allocator_tag,
 	                                      k_compute_stats>;
 
 public:
+
+	using address = detail::bf_address_type<size_type>;
+	using tag = best_fit_arena_allocator_tag;
 	enum : size_type {
 		k_invalid_offset = std::numeric_limits<size_type>::max(),
 		k_invalid_size   = std::numeric_limits<size_type>::max(),
@@ -64,7 +72,6 @@ public:
 	};
 
 	using option_flags = std::uint32_t;
-	using address = typename best_fit_arena_allocator_tag<size_type>::address;
 	//! Address
 
 private:
@@ -178,10 +185,10 @@ private:
 
 public:
 	bool        validate() const;
+
 	static void unit_test() {
 
-		using address_t =
-		    typename best_fit_arena_allocator_tag<std::uint32_t>::address;
+		using address_t = detail::bf_address_type<std::uint32_t>;
 		struct record {
 			address_t     offset;
 			std::uint32_t size;
