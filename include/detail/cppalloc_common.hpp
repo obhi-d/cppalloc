@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cassert>
 #include <chrono>
 #include <cstdint>
@@ -14,7 +15,6 @@
 #include <typeinfo>
 #include <variant>
 #include <vector>
-#include <atomic>
 
 #include "type_name.hpp"
 
@@ -40,7 +40,7 @@
 #define CPPALLOC_API
 #endif
 
-#define CPPALLOC_EXTERN extern
+#define CPPALLOC_EXTERN extern "C"
 
 namespace cppalloc {
 namespace traits {
@@ -105,7 +105,8 @@ struct timer_t {
 			if (timer) {
 				auto end = std::chrono::high_resolution_clock::now();
 				timer->elapsed_time +=
-				    std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+				    std::chrono::duration_cast<std::chrono::microseconds>(end - start)
+				        .count();
 			}
 		}
 
@@ -120,14 +121,14 @@ struct timer_t {
 
 template <typename tag, typename base_t, bool k_print>
 struct statistics<tag, true, base_t, k_print> : public base_t {
-	
+
 	std::atomic_uint32_t arenas_allocated   = 0;
 	std::atomic_uint64_t peak_allocation    = 0;
 	std::atomic_uint64_t allocation         = 0;
 	std::atomic_uint64_t deallocation_count = 0;
 	std::atomic_uint64_t allocation_count   = 0;
-	timer_t       allocation_timing;
-	timer_t       deallocation_timing;
+	timer_t              allocation_timing;
+	timer_t              deallocation_timing;
 
 	template <typename... Args>
 	statistics(Args&&... i_args) : base_t(std::forward<Args>(i_args)...) {}
@@ -136,7 +137,8 @@ struct statistics<tag, true, base_t, k_print> : public base_t {
 		if (k_print) {
 			std::cout << "\n[INFO] Stats for: " << cppalloc::type_name<tag>()
 			          << std::endl;
-			std::cout << "[INFO] Arenas allocated: " << arenas_allocated.load() << std::endl;
+			std::cout << "[INFO] Arenas allocated: " << arenas_allocated.load()
+			          << std::endl;
 			std::cout << "[INFO] Peak allocation: " << peak_allocation.load()
 			          << std::endl;
 			std::cout << "[INFO] Final allocation: " << allocation.load()
@@ -144,8 +146,7 @@ struct statistics<tag, true, base_t, k_print> : public base_t {
 			std::cout << "[INFO] Total allocation call: " << allocation_count.load()
 			          << std::endl;
 			std::cout << "[INFO] Total deallocation call: "
-			          << deallocation_count.load()
-			          << std::endl;
+			          << deallocation_count.load() << std::endl;
 			std::cout << "[INFO] Total allocation time: "
 			          << allocation_timing.elapsed_time_count() << " us" << std::endl;
 			std::cout << "[INFO] Total deallocation time: "
@@ -169,7 +170,8 @@ struct statistics<tag, true, base_t, k_print> : public base_t {
 	[[nodiscard]] timer_t::scoped report_allocate(std::size_t size) {
 		allocation_count++;
 		allocation += size;
-		peak_allocation = std::max<std::size_t>(allocation.load(), peak_allocation.load());
+		peak_allocation =
+		    std::max<std::size_t>(allocation.load(), peak_allocation.load());
 		return timer_t::scoped(allocation_timing);
 	}
 	[[nodiscard]] timer_t::scoped report_deallocate(std::size_t size) {
