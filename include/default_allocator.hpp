@@ -23,25 +23,40 @@ template <bool k_compute = false> struct aligned_alloc_statistics {
 	static int report_deallocate(std::size_t) { return 0; }
 };
 
+#ifndef CPPALLOC_NO_STATS
+
+CPPALLOC_EXTERN CPPALLOC_API detail::statistics<default_allocator_tag, true>
+             default_allocator_statistics_instance;
+CPPALLOC_EXTERN CPPALLOC_API  detail::statistics<aligned_allocator_tag, true>
+             aligned_alloc_statistics_instance;
+
 template <> struct default_alloc_statistics<true> {
-	static timer_t::scoped report_allocate(std::size_t i_sz) {
-		return instance.report_allocate(i_sz);
+	inline static timer_t::scoped report_allocate(std::size_t i_sz) {
+		return get_instance().report_allocate(i_sz);
 	}
-	static timer_t::scoped report_deallocate(std::size_t i_sz) {
-		return instance.report_deallocate(i_sz);
+	inline static timer_t::scoped report_deallocate(std::size_t i_sz) {
+		return get_instance().report_deallocate(i_sz);
 	}
-	CPPALLOC_API static detail::statistics<default_allocator_tag, true> instance;
+	inline static detail::statistics<default_allocator_tag, true>&
+	get_instance() {
+		return default_allocator_statistics_instance;
+	}
 };
 
 template <> struct aligned_alloc_statistics<true> {
-	static timer_t::scoped report_allocate(std::size_t i_sz) {
-		return instance.report_allocate(i_sz);
+	inline static timer_t::scoped report_allocate(std::size_t i_sz) {
+		return get_instance().report_allocate(i_sz);
 	}
-	static timer_t::scoped report_deallocate(std::size_t i_sz) {
-		return instance.report_deallocate(i_sz);
+	inline static timer_t::scoped report_deallocate(std::size_t i_sz) {
+		return get_instance().report_deallocate(i_sz);
 	}
-	CPPALLOC_API static detail::statistics<aligned_allocator_tag, true> instance;
+	inline static detail::statistics<aligned_allocator_tag, true>&
+	get_instance() {
+		return aligned_alloc_statistics_instance;
+	}
 };
+
+#endif
 
 } // namespace detail
 

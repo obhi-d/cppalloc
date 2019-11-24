@@ -5,10 +5,14 @@
 namespace cppalloc {
 namespace detail {
 
+#ifndef CPPALLOC_NO_STATS
+
 detail::statistics<default_allocator_tag, true>
-    default_alloc_statistics<true>::instance;
+             default_allocator_statistics_instance;
 detail::statistics<aligned_allocator_tag, true>
-    aligned_alloc_statistics<true>::instance;
+             aligned_alloc_statistics_instance;
+
+#endif
 
 template <typename size_type, typename stack_tracer, typename out_stream>
 memory_tracker<size_type, stack_tracer, out_stream, true>& memory_tracker<

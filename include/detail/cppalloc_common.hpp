@@ -14,6 +14,7 @@
 #include <typeinfo>
 #include <variant>
 #include <vector>
+#include <atomic>
 
 #include "type_name.hpp"
 
@@ -39,6 +40,8 @@
 #define CPPALLOC_API
 #endif
 
+#define CPPALLOC_EXTERN extern
+
 namespace cppalloc {
 namespace traits {
 
@@ -57,6 +60,28 @@ template <typename ua_t> using tag_t = typename tag<ua_t>::type;
 
 } // namespace traits
 namespace detail {
+
+template <typename tag, bool                     k_compute_stats = false,
+          typename base_t = std::monostate, bool k_print = true>
+struct statistics : public base_t {
+
+	template <typename... Args>
+	statistics(Args&&... i_args) : base_t(std::forward<Args>(i_args)...) {}
+
+	static std::false_type report_new_arena(std::uint32_t count = 1) {
+		return std::false_type{};
+	}
+	static std::false_type report_allocate(std::size_t size) {
+		return std::false_type{};
+	}
+	static std::false_type report_deallocate(std::size_t size) {
+		return std::false_type{};
+	}
+
+	std::uint32_t get_arenas_allocated() const { return 0; }
+};
+
+#ifndef CPPALLOC_NO_STATS
 
 struct timer_t {
 
@@ -79,8 +104,8 @@ struct timer_t {
 		~scoped() {
 			if (timer) {
 				auto end = std::chrono::high_resolution_clock::now();
-				timer->elapsed_time =
-				    std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+				timer->elapsed_time +=
+				    std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
 			}
 		}
 
@@ -88,17 +113,19 @@ struct timer_t {
 		std::chrono::high_resolution_clock::time_point start;
 	};
 
-	std::chrono::microseconds elapsed_time = std::chrono::seconds(0);
+	std::uint64_t elapsed_time_count() { return elapsed_time.load(); }
+
+	std::atomic_uint64_t elapsed_time = 0;
 };
 
-template <typename tag, bool                     k_compute_stats = true,
-          typename base_t = std::monostate, bool k_print = true>
-struct statistics : public base_t {
-	std::uint32_t arenas_allocated   = 0;
-	std::size_t   peak_allocation    = 0;
-	std::size_t   allocation         = 0;
-	std::size_t   deallocation_count = 0;
-	std::size_t   allocation_count   = 0;
+template <typename tag, typename base_t, bool k_print>
+struct statistics<tag, true, base_t, k_print> : public base_t {
+	
+	std::atomic_uint32_t arenas_allocated   = 0;
+	std::atomic_uint64_t peak_allocation    = 0;
+	std::atomic_uint64_t allocation         = 0;
+	std::atomic_uint64_t deallocation_count = 0;
+	std::atomic_uint64_t allocation_count   = 0;
 	timer_t       allocation_timing;
 	timer_t       deallocation_timing;
 
@@ -109,26 +136,30 @@ struct statistics : public base_t {
 		if (k_print) {
 			std::cout << "\n[INFO] Stats for: " << cppalloc::type_name<tag>()
 			          << std::endl;
-			std::cout << "[INFO] Arenas allocated: " << arenas_allocated << std::endl;
-			std::cout << "[INFO] Peak allocation: " << peak_allocation << std::endl;
-			std::cout << "[INFO] Final allocation: " << allocation << std::endl;
-			std::cout << "[INFO] Total allocation call: " << allocation_count
+			std::cout << "[INFO] Arenas allocated: " << arenas_allocated.load() << std::endl;
+			std::cout << "[INFO] Peak allocation: " << peak_allocation.load()
 			          << std::endl;
-			std::cout << "[INFO] Total deallocation call: " << deallocation_count
+			std::cout << "[INFO] Final allocation: " << allocation.load()
+			          << std::endl;
+			std::cout << "[INFO] Total allocation call: " << allocation_count.load()
+			          << std::endl;
+			std::cout << "[INFO] Total deallocation call: "
+			          << deallocation_count.load()
 			          << std::endl;
 			std::cout << "[INFO] Total allocation time: "
-			          << allocation_timing.elapsed_time.count() << " us" << std::endl;
+			          << allocation_timing.elapsed_time_count() << " us" << std::endl;
 			std::cout << "[INFO] Total deallocation time: "
-			          << deallocation_timing.elapsed_time.count() << " us"
+			          << deallocation_timing.elapsed_time_count() << " us"
 			          << std::endl;
 			if (allocation_count > 0)
 				std::cout << "[INFO] Avg allocation time: "
-				          << allocation_timing.elapsed_time.count() / allocation_count
+				          << allocation_timing.elapsed_time_count() /
+				                 allocation_count.load()
 				          << " us" << std::endl;
 			if (deallocation_count > 0)
 				std::cout << "[INFO] Avg deallocation time: "
-				          << deallocation_timing.elapsed_time.count() /
-				                 deallocation_count
+				          << deallocation_timing.elapsed_time_count() /
+				                 deallocation_count.load()
 				          << " us" << std::endl;
 		}
 	}
@@ -138,7 +169,7 @@ struct statistics : public base_t {
 	[[nodiscard]] timer_t::scoped report_allocate(std::size_t size) {
 		allocation_count++;
 		allocation += size;
-		peak_allocation = std::max<std::size_t>(allocation, peak_allocation);
+		peak_allocation = std::max<std::size_t>(allocation.load(), peak_allocation.load());
 		return timer_t::scoped(allocation_timing);
 	}
 	[[nodiscard]] timer_t::scoped report_deallocate(std::size_t size) {
@@ -147,27 +178,10 @@ struct statistics : public base_t {
 		return timer_t::scoped(deallocation_timing);
 	}
 
-	std::uint32_t get_arenas_allocated() const { return arenas_allocated; }
+	std::uint32_t get_arenas_allocated() const { return arenas_allocated.load(); }
 };
 
-template <typename tag, typename base_t, bool k_print>
-struct statistics<tag, false, base_t, k_print> : public base_t {
-
-	template <typename... Args>
-	statistics(Args&&... i_args) : base_t(std::forward<Args>(i_args)...) {}
-
-	static std::false_type report_new_arena(std::uint32_t count = 1) {
-		return std::false_type{};
-	}
-	static std::false_type report_allocate(std::size_t size) {
-		return std::false_type{};
-	}
-	static std::false_type report_deallocate(std::size_t size) {
-		return std::false_type{};
-	}
-
-	std::uint32_t get_arenas_allocated() const { return 0; }
-};
+#endif
 
 } // namespace detail
 
