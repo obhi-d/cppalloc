@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "type_name.hpp"
+#include "cppalloc_traits.hpp"
 
 #ifdef _MSC_VER
 #include <malloc.h>
@@ -25,9 +26,11 @@
 #if defined(_MSC_VER)
 #define CPPALLOC_EXPORT __declspec(dllexport)
 #define CPPALLOC_IMPORT __declspec(dllimport)
+#define CPPALLOC_EMPTY_BASES __declspec(empty_bases)
 #else
 #define CPPALLOC_EXPORT __attribute__((visibility("default")))
 #define CPPALLOC_IMPORT __attribute__((visibility("default")))
+#define CPPALLOC_EMPTY_BASES
 #endif
 
 #ifdef CPPALLOC_DLL_IMPL
@@ -43,22 +46,6 @@
 #define CPPALLOC_EXTERN extern "C"
 
 namespace cppalloc {
-namespace traits {
-
-template <typename underlying_allocator_tag> constexpr bool is_static_v = false;
-template <typename underlying_allocator_tag>
-constexpr bool is_memory_allocator_v = true;
-
-template <typename ua_t, class = std::void_t<>> struct tag {
-	using type = void;
-};
-template <typename ua_t> struct tag<ua_t, std::void_t<typename ua_t::tag>> {
-	using type = typename ua_t::tag;
-};
-
-template <typename ua_t> using tag_t = typename tag<ua_t>::type;
-
-} // namespace traits
 namespace detail {
 
 template <typename tag, bool                     k_compute_stats = false,
@@ -119,8 +106,8 @@ struct timer_t {
 	std::atomic_uint64_t elapsed_time = 0;
 };
 
-template <typename tag, typename base_t, bool k_print>
-struct statistics<tag, true, base_t, k_print> : public base_t {
+template <typename tag_arg, typename base_arg, bool k_print>
+struct statistics<tag_arg, true, base_arg, k_print> : public base_arg {
 
 	std::atomic_uint32_t arenas_allocated   = 0;
 	std::atomic_uint64_t peak_allocation    = 0;
@@ -131,11 +118,11 @@ struct statistics<tag, true, base_t, k_print> : public base_t {
 	timer_t              deallocation_timing;
 
 	template <typename... Args>
-	statistics(Args&&... i_args) : base_t(std::forward<Args>(i_args)...) {}
+	statistics(Args&&... i_args) : base_arg(std::forward<Args>(i_args)...) {}
 	~statistics() {
 
 		if (k_print) {
-			std::cout << "\n[INFO] Stats for: " << cppalloc::type_name<tag>()
+			std::cout << "\n[INFO] Stats for: " << cppalloc::type_name<tag_arg>()
 			          << std::endl;
 			std::cout << "[INFO] Arenas allocated: " << arenas_allocated.load()
 			          << std::endl;

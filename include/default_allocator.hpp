@@ -8,8 +8,12 @@ struct default_allocator_tag {};
 struct aligned_allocator_tag {};
 
 namespace traits {
-template <> constexpr bool is_static_v<default_allocator_tag> = true;
-template <> constexpr bool is_static_v<aligned_allocator_tag> = true;
+template <> struct is_static<default_allocator_tag> {
+	constexpr inline static bool value = true;
+};
+template <> struct is_static<aligned_allocator_tag> {
+	constexpr inline static bool value = true;
+};
 } // namespace traits
 
 namespace detail {
@@ -26,9 +30,9 @@ template <bool k_compute = false> struct aligned_alloc_statistics {
 #ifndef CPPALLOC_NO_STATS
 
 CPPALLOC_EXTERN CPPALLOC_API detail::statistics<default_allocator_tag, true>
-             default_allocator_statistics_instance;
-CPPALLOC_EXTERN CPPALLOC_API  detail::statistics<aligned_allocator_tag, true>
-             aligned_alloc_statistics_instance;
+                             default_allocator_statistics_instance;
+CPPALLOC_EXTERN CPPALLOC_API detail::statistics<aligned_allocator_tag, true>
+                             aligned_alloc_statistics_instance;
 
 template <> struct default_alloc_statistics<true> {
 	inline static timer_t::scoped report_allocate(std::size_t i_sz) {
@@ -60,21 +64,27 @@ template <> struct aligned_alloc_statistics<true> {
 
 } // namespace detail
 
-template <typename size_ty = std::uint32_t, bool k_compute_stats = false,
-          bool k_track_memory = false, typename stack_tracer = std::monostate,
-          typename output_stream = std::monostate>
-struct default_allocator
+template <typename size_arg = std::uint32_t, bool k_compute_stats = false,
+          bool k_track_memory = false, typename debug_tracer = std::monostate>
+struct CPPALLOC_EMPTY_BASES default_allocator
     : detail::default_alloc_statistics<k_compute_stats>,
-      detail::memory_tracker<size_ty, stack_tracer, output_stream,
+      detail::memory_tracker<default_allocator_tag, debug_tracer,
                              k_track_memory> {
 	using tag        = default_allocator_tag;
 	using address    = void*;
-	using size_type  = size_ty;
+	using size_type  = size_arg;
 	using statistics = detail::default_alloc_statistics<k_compute_stats>;
-	using tracker = detail::memory_tracker<size_ty, stack_tracer, output_stream,
+	using tracker = detail::memory_tracker<default_allocator_tag, debug_tracer,
 	                                       k_track_memory>;
 
-	default_allocator() { }
+	default_allocator() {}
+	default_allocator(default_allocator<size_arg, k_compute_stats, k_track_memory,
+	                                    debug_tracer> const&) {}
+	default_allocator& operator=(
+	    default_allocator<size_arg, k_compute_stats, k_track_memory,
+	                      debug_tracer> const&) {
+		return *this;
+	}
 	static address allocate(size_type i_sz) {
 		auto measure = statistics::report_allocate(i_sz);
 		return tracker::when_allocate(std::malloc(i_sz), i_sz);
@@ -85,22 +95,31 @@ struct default_allocator
 	}
 };
 
-
-template <std::uint32_t k_alignment, typename size_ty = std::uint32_t,
+template <std::uint32_t k_alignment, typename size_arg = std::uint32_t,
           bool k_compute_stats = false, bool k_track_memory = false,
-          typename stack_tracer  = std::monostate,
-          typename output_stream = std::monostate>
-struct aligned_allocator
+          typename debug_tracer = std::monostate>
+struct CPPALLOC_EMPTY_BASES aligned_allocator
     : detail::aligned_alloc_statistics<k_compute_stats>,
-      detail::memory_tracker<size_ty, stack_tracer, output_stream,
+      detail::memory_tracker<aligned_allocator_tag, debug_tracer,
                              k_track_memory> {
 
 	using tag        = aligned_allocator_tag;
 	using address    = void*;
-	using size_type  = size_ty;
+	using size_type  = size_arg;
 	using statistics = detail::aligned_alloc_statistics<k_compute_stats>;
-	using tracker = detail::memory_tracker<size_ty, stack_tracer, output_stream,
+	using tracker = detail::memory_tracker<aligned_allocator_tag, debug_tracer,
 	                                       k_track_memory>;
+
+	aligned_allocator() {}
+	aligned_allocator(
+	    aligned_allocator<k_alignment, size_arg, k_compute_stats, k_track_memory,
+	                      debug_tracer> const&) {}
+
+	aligned_allocator& operator=(
+	    aligned_allocator<k_alignment, size_arg, k_compute_stats, k_track_memory,
+	                      debug_tracer> const&) {
+		return *this;
+	}
 
 	static address allocate(size_type i_sz) {
 		auto measure = statistics::report_allocate(i_sz);

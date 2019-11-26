@@ -6,8 +6,12 @@
 namespace cppalloc {
 namespace detail {
 
-template <typename T, typename underlying_allocator, bool static_ua = false>
-class std_allocator_wrapper : public std::allocator<T> {
+template <typename T, typename underlying_allocator, bool static_ua>
+struct std_allocator_wrapper;
+
+template <typename T, typename underlying_allocator>
+class std_allocator_wrapper<T, underlying_allocator, false>
+    : public std::allocator<T> {
 public:
 	//    typedefs
 	using pointer = typename std::allocator_traits<std::allocator<T>>::pointer;
@@ -24,7 +28,7 @@ public:
 	//    convert an allocator<T> to allocator<U>
 
 	template <typename U> struct rebind {
-		typedef std_allocator_wrapper<U, underlying_allocator> other;
+		typedef std_allocator_wrapper<U, underlying_allocator, false> other;
 	};
 
 public:
@@ -36,7 +40,7 @@ public:
 	/*	inline explicit std_allocator_wrapper(std_allocator_wrapper const&) {}*/
 	template <typename U>
 	inline std_allocator_wrapper(
-	    std_allocator_wrapper<U, underlying_allocator> const& other)
+	    std_allocator_wrapper<U, underlying_allocator, false> const& other)
 	    : impl_(other.get_impl()) {}
 
 	//    memory allocation
@@ -90,20 +94,25 @@ public:
 	//    convert an allocator<T> to allocator<U>
 
 	template <typename U> struct rebind {
-		typedef std_allocator_wrapper<U, underlying_allocator> other;
+		typedef std_allocator_wrapper<U, underlying_allocator, true> other;
 	};
 
 public:
-	inline explicit std_allocator_wrapper(const underlying_allocator& impl)
+	inline std_allocator_wrapper() {}
+
+	inline explicit std_allocator_wrapper(underlying_allocator const& impl)
 	    : underlying_allocator(impl) {}
+	inline std_allocator_wrapper(
+	    std_allocator_wrapper<T, underlying_allocator, true> const& impl)
+	    : underlying_allocator((underlying_allocator const&)impl) {}
 
 	inline ~std_allocator_wrapper() {}
 
 	/*	inline explicit std_allocator_wrapper(std_allocator_wrapper const&) {}*/
 	template <typename U>
 	inline std_allocator_wrapper(
-	    std_allocator_wrapper<U, underlying_allocator> const& other)
-	    : underlying_allocator(other) {}
+	    std_allocator_wrapper<U, underlying_allocator, true> const& other)
+	    : underlying_allocator((underlying_allocator&)other) {}
 
 	//    memory allocation
 
@@ -133,10 +142,14 @@ public:
 
 template <typename T, typename underlying_allocator>
 class std_allocator_wrapper
-    : public detail::std_allocator_wrapper<T, underlying_allocator, traits::is_static_v<traits::tag_t<underlying_allocator>>> {
+    : public detail::std_allocator_wrapper<
+          T, underlying_allocator,
+          traits::is_static_v<traits::tag_t<underlying_allocator>>> {
 public:
 	//    typedefs
-	using base_type = detail::std_allocator_wrapper<T, underlying_allocator, traits::is_static_v<traits::tag_t<underlying_allocator>>>;
+	using base_type = detail::std_allocator_wrapper<
+	    T, underlying_allocator,
+	    traits::is_static_v<traits::tag_t<underlying_allocator>>>;
 	using pointer = typename std::allocator_traits<std::allocator<T>>::pointer;
 	using const_pointer =
 	    typename std::allocator_traits<std::allocator<T>>::const_pointer;
@@ -149,8 +162,9 @@ public:
 
 	std_allocator_wrapper() = default;
 
-	template <typename...Args>
-	inline std_allocator_wrapper(Args&&...args) : base_type(std::forward<Args>(args)...) {}
+	template <typename... Args>
+	inline std_allocator_wrapper(Args&&... args)
+	    : base_type(std::forward<Args>(args)...) {}
 };
 
 } // namespace cppalloc
