@@ -50,23 +50,6 @@ public:
 
 	size_type get_free_size() const { return left_over; }
 
-	static void unit_test() {
-		using allocator_t =
-		    linear_allocator<aligned_allocator<16, std::uint32_t, true>, true>;
-		struct record {
-			void*         data;
-			std::uint32_t size;
-		};
-		constexpr std::uint32_t k_arena_size = 1000;
-		allocator_t             allocator(k_arena_size);
-		auto start  = cppalloc::allocate<std::uint8_t*>(allocator, 40);
-		auto off100 = cppalloc::allocate<std::uint8_t*>(allocator, 100);
-		assert(start + 40 == off100);
-		allocator.deallocate(off100, 100);
-		off100 = cppalloc::allocate<std::uint8_t*>(allocator, 100);
-		assert(start + 40 == off100);
-	}
-
 private:
 	address         buffer;
 	size_type       left_over;

@@ -104,30 +104,6 @@ private:
 	const size_type k_arena_size;
 
 public:
-	static void unit_test() {
-		using allocator_t =
-		    linear_arena_allocator<aligned_allocator<16, std::uint32_t, true>,
-		                           true>;
-		struct record {
-			void*         data;
-			std::uint32_t size;
-		};
-		constexpr std::uint32_t k_arena_size = 1000;
-		allocator_t             allocator(k_arena_size);
-		auto start  = cppalloc::allocate<std::uint8_t*>(allocator, 40);
-		auto off100 = cppalloc::allocate<std::uint8_t*>(allocator, 100);
-		assert(start + 40 == off100);
-		allocator.deallocate(off100, 100);
-		off100 = cppalloc::allocate<std::uint8_t*>(allocator, 100);
-		assert(start + 40 == off100);
-		auto new_arena = cppalloc::allocate<std::uint8_t*>(allocator, 1000);
-		assert(2 == allocator.get_arenas_allocated());
-		auto from_old = cppalloc::allocate<std::uint8_t*>(allocator, 40);
-		assert(off100 + 100 == from_old);
-		allocator.deallocate(new_arena, 1000);
-		new_arena = cppalloc::allocate<std::uint8_t*>(allocator, 1000);
-		assert(2 == allocator.get_arenas_allocated());
-	}
 };
 
 } // namespace cppalloc

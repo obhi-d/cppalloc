@@ -22,7 +22,7 @@ struct memory_tracker {
 
 template <typename size_type, typename stack_tracer, typename out_stream>
 struct CPPALLOC_API memory_tracker<size_type, stack_tracer, out_stream, true> {
-	using backtrace = typename stack_tracer;
+	using backtrace = stack_tracer;
 
 	static memory_tracker& get_instance();
 	~memory_tracker();
