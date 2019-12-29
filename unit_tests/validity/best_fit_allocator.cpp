@@ -31,10 +31,8 @@ TEST_CASE("Validate best_fit_allocator", "[best_fit_allocator]") {
 }
 
 TEST_CASE("Validate best_fit_arena_allocator", "[best_fit_arena_allocator]") {
-
 	using namespace cppalloc;
-	using address_t =
-	    typename best_fit_arena_allocator_tag<std::uint32_t>::address;
+	using address_t = typename detail::bf_address_type<std::uint32_t>;
 	struct record {
 		address_t     offset;
 		std::uint32_t size;
