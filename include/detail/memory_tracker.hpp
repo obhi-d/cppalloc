@@ -9,7 +9,6 @@
 
 namespace cppalloc {
 namespace detail {
-
 struct dummy_debug_tracer {
 	struct backtrace {
 		template <typename stream>
@@ -52,7 +51,6 @@ struct CPPALLOC_API memory_tracker_impl {
 	using backtrace  = typename debug_tracer::backtrace;
 	using hasher     = typename debug_tracer::hasher;
 	~memory_tracker_impl() {
-
 		if (pointer_map.size() > 0) {
 			out("\nPossible leaks\n");
 			std::ostringstream stream;
@@ -68,7 +66,6 @@ struct CPPALLOC_API memory_tracker_impl {
 	template <typename Arg> void set_out_stream(Arg&& i_out) { out = std::forward<Arg>(i_out); }
 
 	void when_allocate(void* i_data, std::size_t i_size) {
-
 		std::unique_lock<std::mutex> ul(lock);
 		if (!ignore_first) {
 			ignore_first = i_data;
@@ -116,12 +113,10 @@ struct CPPALLOC_API memory_tracker_impl {
 
 template <typename tag_arg, typename debug_tracer>
 struct CPPALLOC_API memory_tracker<tag_arg, debug_tracer, true> {
-
 	template <typename Arg> static void set_out_stream(Arg&& i_out) {
 		memory_tracker_impl<tag_arg, debug_tracer>::get_instance()
 		    .set_out_stream(std::forward<Arg>(i_out));
 	}
-
 
 	static void* when_allocate(void* i_data, std::size_t i_size) {
 		memory_tracker_impl<tag_arg, debug_tracer>::get_instance().when_allocate(
@@ -134,6 +129,5 @@ struct CPPALLOC_API memory_tracker<tag_arg, debug_tracer, true> {
 		return i_data;
 	}
 };
-
 } // namespace detail
 } // namespace cppalloc

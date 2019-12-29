@@ -126,7 +126,7 @@ struct CPPALLOC_EMPTY_BASES aligned_allocator
 #ifdef _MSC_VER
 		return tracker::when_allocate(_aligned_malloc(i_sz, k_alignment), i_sz);
 #else
-		return tracker::when_allocate(aligned_alloc(k_alignment, i_sz), i_sz);
+		return tracker::when_allocate(aligned_alloc(k_alignment, i_sz + (i_sz & (k_alignment - 1))), i_sz);
 #endif
 	}
 	static void deallocate(address i_addr, size_type i_sz) {

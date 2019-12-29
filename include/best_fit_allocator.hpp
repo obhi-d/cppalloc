@@ -37,8 +37,7 @@ public:
 
 	//! Unittst
 	bool        validate();
-	static void unit_test();
-
+	
 private:
 	using ordering_by   = detail::ordering_by;
 	using ordering_type = detail::ordering_type;
@@ -557,38 +556,6 @@ inline bool best_fit_allocator<size_type, k_growable,
 	}
 	return true;
 }
-
-template <typename size_type, bool k_growable, bool k_compute_stats>
-inline void best_fit_allocator<size_type, k_growable,
-                               k_compute_stats>::unit_test() {
-	best_fit_allocator<size_type, k_growable, k_compute_stats> allocator;
-	std::minstd_rand                                           gen;
-	std::bernoulli_distribution                                dice(0.7);
-	std::uniform_int_distribution<std::uint32_t> generator(1, 100000);
-
-	struct record {
-		size_type offset, size;
-	};
-	std::vector<record> allocated;
-	for (std::uint32_t allocs = 0; allocs < 10000; ++allocs) {
-		if (dice(gen) || allocated.size() == 0) {
-			record r;
-			r.size   = generator(gen);
-			r.offset = allocator.allocate(r.size);
-			if (r.offset != k_null)
-				allocated.push_back(r);
-			assert(allocator.validate());
-		} else {
-			std::uniform_int_distribution<std::uint32_t> choose(
-			    0, static_cast<std::uint32_t>(allocated.size() - 1));
-			std::uint32_t chosen = choose(gen);
-			allocator.deallocate(allocated[chosen].offset, allocated[chosen].size);
-			allocated.erase(allocated.begin() + chosen);
-			assert(allocator.validate());
-		}
-	}
-}
-
 template <typename size_type, bool k_growable, bool k_compute_stats>
 template <detail::ordering_by i_order>
 inline best_fit_allocator<size_type, k_growable, k_compute_stats>::iterator<
