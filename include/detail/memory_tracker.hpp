@@ -124,8 +124,10 @@ struct CPPALLOC_API memory_tracker<tag_arg, debug_tracer, true> {
 		return i_data;
 	}
 	static void* when_deallocate(void* i_data, std::size_t i_size) {
-		memory_tracker_impl<tag_arg, debug_tracer>::get_instance().when_deallocate(
-		    i_data, i_size);
+		if (i_data) {
+			memory_tracker_impl<tag_arg, debug_tracer>::get_instance().when_deallocate(
+				i_data, i_size);
+		}
 		return i_data;
 	}
 };
