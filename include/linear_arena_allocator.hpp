@@ -71,7 +71,7 @@ public:
 
 	void rewind() {
 		current_arena = 0;
-		for(auto& ar : arena) 
+		for(auto& ar : arenas) 
 			ar.left_over = ar.arena_size;
 	}
 
