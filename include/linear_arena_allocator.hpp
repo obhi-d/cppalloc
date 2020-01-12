@@ -69,6 +69,12 @@ public:
 		}
 	}
 
+	void rewind() {
+		current_arena = 0;
+		for(auto& ar : arena) 
+			ar.left_over = ar.arena_size;
+	}
+
 private:
 	struct arena {
 		address   buffer;
