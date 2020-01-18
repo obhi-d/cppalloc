@@ -69,10 +69,28 @@ public:
 		}
 	}
 
+	void smart_rewind() {
+		// delete remaining arenas
+		for (size_type index = current_arena + 1,
+		               end   = static_cast<size_type>(arenas.size());
+		     index < end; ++index) {
+			underlying_allocator::deallocate(arenas[index].buffer,
+			                                 arenas[index].arena_size);
+		}
+		arenas.resize(current_arena + 1);
+		current_arena = 0;
+		for (auto& ar : arenas)
+			ar.left_over = ar.arena_size;
+	}
+
 	void rewind() {
 		current_arena = 0;
 		for(auto& ar : arenas) 
 			ar.left_over = ar.arena_size;
+	}
+
+	std::uint32_t get_arena_count() const {
+		return static_cast<std::uint32_t>(arenas.size());
 	}
 
 private:
