@@ -88,7 +88,6 @@ struct CPPALLOC_API memory_tracker_impl {
 		if (it == pointer_map.end()) {
 			ss << "\nInvalid memory free -> \n";
 			ss << backtrace();
-			throw;
 		}
 		pointer_map.erase(it);
 		memory_counter -= i_size;
