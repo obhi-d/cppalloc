@@ -11,13 +11,15 @@
 #include <limits>
 #include <new>
 #include <random>
+#include <sstream>
+#include <string>
 #include <type_traits>
 #include <typeinfo>
 #include <variant>
 #include <vector>
 
-#include "type_name.hpp"
 #include "cppalloc_traits.hpp"
+#include "type_name.hpp"
 
 #ifdef _MSC_VER
 #include <malloc.h>
@@ -43,10 +45,16 @@
 #define CPPALLOC_API
 #endif
 
+#ifndef CPPALLOC_PRINT_DEBUG
+#define CPPALLOC_PRINT_DEBUG(info) cppalloc::detail::print_debug_info(info)
+#endif
+
 #define CPPALLOC_EXTERN extern "C"
 
 namespace cppalloc {
 namespace detail {
+
+inline void print_debug_info(std::string const& s) { std::cout << s; }
 
 template <typename tag, bool                     k_compute_stats = false,
           typename base_t = std::monostate, bool k_print = true>
@@ -122,33 +130,29 @@ struct statistics<tag_arg, true, base_arg, k_print> : public base_arg {
 	~statistics() {
 
 		if (k_print) {
-			std::cout << "\n[INFO] Stats for: " << cppalloc::type_name<tag_arg>()
-			          << std::endl;
-			std::cout << "[INFO] Arenas allocated: " << arenas_allocated.load()
-			          << std::endl;
-			std::cout << "[INFO] Peak allocation: " << peak_allocation.load()
-			          << std::endl;
-			std::cout << "[INFO] Final allocation: " << allocation.load()
-			          << std::endl;
-			std::cout << "[INFO] Total allocation call: " << allocation_count.load()
-			          << std::endl;
-			std::cout << "[INFO] Total deallocation call: "
-			          << deallocation_count.load() << std::endl;
-			std::cout << "[INFO] Total allocation time: "
-			          << allocation_timing.elapsed_time_count() << " us" << std::endl;
-			std::cout << "[INFO] Total deallocation time: "
-			          << deallocation_timing.elapsed_time_count() << " us"
-			          << std::endl;
+			std::stringstream ss;
+			ss << "Stats for: " << cppalloc::type_name<tag_arg>()
+			   << "\n"
+			   << "Arenas allocated: " << arenas_allocated.load() << "\n"
+			   << "Peak allocation: " << peak_allocation.load() << "\n"
+			   << "Final allocation: " << allocation.load() << "\n"
+			   << "Total allocation call: " << allocation_count.load() << "\n"
+			   << "Total deallocation call: " << deallocation_count.load() << "\n"
+			   << "Total allocation time: " << allocation_timing.elapsed_time_count()
+			   << " us \n"
+			   << "Total deallocation time: "
+			   << deallocation_timing.elapsed_time_count() << " us\n";
 			if (allocation_count > 0)
-				std::cout << "[INFO] Avg allocation time: "
-				          << allocation_timing.elapsed_time_count() /
-				                 allocation_count.load()
-				          << " us" << std::endl;
+				ss << "Avg allocation time: "
+				   << allocation_timing.elapsed_time_count() / allocation_count.load()
+				   << " us\n";
 			if (deallocation_count > 0)
-				std::cout << "[INFO] Avg deallocation time: "
-				          << deallocation_timing.elapsed_time_count() /
-				                 deallocation_count.load()
-				          << " us" << std::endl;
+				ss << "Avg deallocation time: "
+				   << deallocation_timing.elapsed_time_count() /
+				          deallocation_count.load()
+				   << " us\n";
+
+			CPPALLOC_PRINT_DEBUG(ss.str());
 		}
 	}
 
