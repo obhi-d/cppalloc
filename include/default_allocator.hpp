@@ -3,7 +3,6 @@
 #include <detail/memory_tracker.hpp>
 
 namespace cppalloc {
-
 struct default_allocator_tag {};
 struct aligned_allocator_tag {};
 
@@ -59,10 +58,13 @@ template <> struct aligned_alloc_statistics<true> {
 		return aligned_alloc_statistics_instance;
 	}
 };
-
 #endif
-
 } // namespace detail
+
+inline void print_final_stats() {
+	detail::aligned_alloc_statistics_instance.print();
+	detail::default_allocator_statistics_instance.print();
+}
 
 template <typename size_arg = std::uint32_t, bool k_compute_stats = false,
           bool k_track_memory = false, typename debug_tracer = std::monostate>
@@ -74,8 +76,8 @@ struct CPPALLOC_EMPTY_BASES default_allocator
 	using address    = void*;
 	using size_type  = size_arg;
 	using statistics = detail::default_alloc_statistics<k_compute_stats>;
-	using tracker = detail::memory_tracker<default_allocator_tag, debug_tracer,
-	                                       k_track_memory>;
+	using tracker    = detail::memory_tracker<default_allocator_tag, debug_tracer,
+                                         k_track_memory>;
 
 	default_allocator() {}
 	default_allocator(default_allocator<size_arg, k_compute_stats, k_track_memory,
@@ -102,18 +104,16 @@ struct CPPALLOC_EMPTY_BASES aligned_allocator
     : detail::aligned_alloc_statistics<k_compute_stats>,
       detail::memory_tracker<aligned_allocator_tag, debug_tracer,
                              k_track_memory> {
-
 	using tag        = aligned_allocator_tag;
 	using address    = void*;
 	using size_type  = size_arg;
 	using statistics = detail::aligned_alloc_statistics<k_compute_stats>;
-	using tracker = detail::memory_tracker<aligned_allocator_tag, debug_tracer,
-	                                       k_track_memory>;
+	using tracker    = detail::memory_tracker<aligned_allocator_tag, debug_tracer,
+                                         k_track_memory>;
 
 	aligned_allocator() {}
-	aligned_allocator(
-	    aligned_allocator<k_alignment, size_arg, k_compute_stats, k_track_memory,
-	                      debug_tracer> const&) {}
+	aligned_allocator(aligned_allocator<k_alignment, size_arg, k_compute_stats,
+	                                    k_track_memory, debug_tracer> const&) {}
 
 	aligned_allocator& operator=(
 	    aligned_allocator<k_alignment, size_arg, k_compute_stats, k_track_memory,
@@ -126,7 +126,8 @@ struct CPPALLOC_EMPTY_BASES aligned_allocator
 #ifdef _MSC_VER
 		return tracker::when_allocate(_aligned_malloc(i_sz, k_alignment), i_sz);
 #else
-		return tracker::when_allocate(aligned_alloc(k_alignment, i_sz + (i_sz & (k_alignment - 1))), i_sz);
+		return tracker::when_allocate(
+		    aligned_alloc(k_alignment, i_sz + (i_sz & (k_alignment - 1))), i_sz);
 #endif
 	}
 	static void deallocate(address i_addr, size_type i_sz) {
@@ -138,5 +139,4 @@ struct CPPALLOC_EMPTY_BASES aligned_allocator
 #endif
 	}
 };
-
 } // namespace cppalloc

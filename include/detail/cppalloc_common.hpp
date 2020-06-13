@@ -53,16 +53,15 @@
 
 namespace cppalloc {
 namespace detail {
-
 inline void print_debug_info(std::string const& s) { std::cout << s; }
 
 template <typename tag, bool                     k_compute_stats = false,
           typename base_t = std::monostate, bool k_print = true>
 struct statistics : public base_t {
-
 	template <typename... Args>
 	statistics(Args&&... i_args) : base_t(std::forward<Args>(i_args)...) {}
 
+	void                   print() {}
 	static std::false_type report_new_arena(std::uint32_t count = 1) {
 		return std::false_type{};
 	}
@@ -79,7 +78,6 @@ struct statistics : public base_t {
 #ifndef CPPALLOC_NO_STATS
 
 struct timer_t {
-
 	struct scoped {
 		scoped(timer_t& t) : timer(&t) {
 			start = std::chrono::high_resolution_clock::now();
@@ -116,7 +114,6 @@ struct timer_t {
 
 template <typename tag_arg, typename base_arg, bool k_print>
 struct statistics<tag_arg, true, base_arg, k_print> : public base_arg {
-
 	std::atomic_uint32_t arenas_allocated   = 0;
 	std::atomic_uint64_t peak_allocation    = 0;
 	std::atomic_uint64_t allocation         = 0;
@@ -124,15 +121,16 @@ struct statistics<tag_arg, true, base_arg, k_print> : public base_arg {
 	std::atomic_uint64_t allocation_count   = 0;
 	timer_t              allocation_timing;
 	timer_t              deallocation_timing;
+	bool                 stats_printed = false;
 
 	template <typename... Args>
 	statistics(Args&&... i_args) : base_arg(std::forward<Args>(i_args)...) {}
-	~statistics() {
+	~statistics() { print(); }
 
-		if (k_print) {
+	void print() {
+		if (k_print && !stats_printed) {
 			std::stringstream ss;
-			ss << "Stats for: " << cppalloc::type_name<tag_arg>()
-			   << "\n"
+			ss << "Stats for: " << cppalloc::type_name<tag_arg>() << "\n"
 			   << "Arenas allocated: " << arenas_allocated.load() << "\n"
 			   << "Peak allocation: " << peak_allocation.load() << "\n"
 			   << "Final allocation: " << allocation.load() << "\n"
@@ -153,6 +151,7 @@ struct statistics<tag_arg, true, base_arg, k_print> : public base_arg {
 				   << " us\n";
 
 			CPPALLOC_PRINT_DEBUG(ss.str());
+			stats_printed = true;
 		}
 	}
 
@@ -175,7 +174,6 @@ struct statistics<tag_arg, true, base_arg, k_print> : public base_arg {
 };
 
 #endif
-
 } // namespace detail
 
 template <typename address_type, typename allocator, typename size_type,
@@ -184,5 +182,4 @@ address_type allocate(allocator& i_alloc, size_type i_size, Args&&... i_args) {
 	return reinterpret_cast<address_type>(
 	    i_alloc.allocate(i_size, std::forward<Args>(i_args)...));
 }
-
 } // namespace cppalloc
