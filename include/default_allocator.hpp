@@ -5,6 +5,7 @@
 namespace cppalloc {
 struct default_allocator_tag {};
 struct aligned_allocator_tag {};
+struct general_allocator_tag {};
 
 namespace traits {
 template <> struct is_static<default_allocator_tag> {
@@ -131,6 +132,48 @@ struct CPPALLOC_EMPTY_BASES aligned_allocator
 #endif
 	}
 	static void deallocate(address i_addr, size_type i_sz) {
+		auto measure = statistics::report_deallocate(i_sz);
+#ifdef _MSC_VER
+		_aligned_free(tracker::when_deallocate(i_addr, i_sz));
+#else
+		free(tracker::when_deallocate(i_addr, i_sz));
+#endif
+	}
+};
+
+template <typename size_arg = std::uint32_t, bool k_compute_stats = false,
+          bool k_track_memory = false, typename debug_tracer = std::monostate>
+struct CPPALLOC_EMPTY_BASES general_allocator
+    : detail::aligned_alloc_statistics<k_compute_stats>,
+      detail::memory_tracker<general_allocator_tag, debug_tracer,
+                             k_track_memory> {
+	using tag        = aligned_allocator_tag;
+	using address    = void*;
+	using size_type  = size_arg;
+	using statistics = detail::aligned_alloc_statistics<k_compute_stats>;
+	using tracker    = detail::memory_tracker<general_allocator_tag, debug_tracer,
+                                         k_track_memory>;
+
+	general_allocator() {}
+	general_allocator(general_allocator<size_arg, k_compute_stats, k_track_memory,
+	                                    debug_tracer> const&) {}
+
+	general_allocator& operator=(
+	    general_allocator<size_arg, k_compute_stats, k_track_memory,
+	                      debug_tracer> const&) {
+		return *this;
+	}
+
+	static address allocate(size_type i_alignment, size_type i_sz) {
+		auto measure = statistics::report_allocate(i_sz);
+#ifdef _MSC_VER
+		return tracker::when_allocate(_aligned_malloc(i_sz, i_alignment), i_sz);
+#else
+		return tracker::when_allocate(aligned_alloc(i_alignment, i_sz), i_sz);
+#endif
+	}
+	static void deallocate(address i_addr, [[maybe_unused]] size_type i_alignment,
+	                       size_type i_sz) {
 		auto measure = statistics::report_deallocate(i_sz);
 #ifdef _MSC_VER
 		_aligned_free(tracker::when_deallocate(i_addr, i_sz));
