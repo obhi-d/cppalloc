@@ -10,6 +10,9 @@
 
 namespace cppalloc {
 
+template <typename size_type = std::uint32_t>
+constexpr size_type default_alignment = 0;
+
 //! Define Allocator concept
 //! template <typename T>
 //! concept Allocator = requires(Allocator a) {

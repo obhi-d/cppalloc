@@ -20,7 +20,7 @@ public:
 	enum : size_type { k_minimum_size = static_cast<size_type>(64) };
 
 	template <typename... Args>
-	linear_arena_allocator(size_type i_arena_size, Args&&... i_args)
+	explicit linear_arena_allocator(size_type i_arena_size, Args&&... i_args)
 	    : k_arena_size(i_arena_size), statistics(std::forward<Args>(i_args)...),
 	      current_arena(0) {
 		// Initializing the cursor is important for the
@@ -32,34 +32,59 @@ public:
 		}
 	}
 
-	address allocate(size_type i_size) {
+	address allocate(size_type i_size, size_type i_alignment = 0) {
 
 		auto measure = statistics::report_allocate(i_size);
+    // assert
+    auto fixup = i_alignment - 1;
+    if (i_alignment)
+      i_size += fixup + 4;
+
+    address ret_value;
 
 		for (size_type index = current_arena,
 		               end   = static_cast<size_type>(arenas.size());
 		     index < end; ++index) {
 
 			if (arenas[index].left_over >= i_size)
-				return allocate_from(index, i_size);
+        ret_value = allocate_from(index, i_size);
 			else {
 				if (arenas[index].left_over < k_minimum_size && index != current_arena)
 					std::swap(arenas[index], arenas[current_arena++]);
 			}
 		}
 		size_type max_arena_size = std::max<size_type>(i_size, k_arena_size);
-		return allocate_from(allocate_new_arena(max_arena_size), i_size);
-	}
+    ret_value = allocate_from(allocate_new_arena(max_arena_size), i_size);
 
-	void deallocate(address i_data, size_type i_size) {
+    if (i_alignment)
+    {
+      auto pointer = reinterpret_cast<std::uintptr_t>(ret_value);
+      auto ret     = ((pointer + 4 + static_cast<std::uintptr_t>(fixup)) + ~static_cast<std::uintptr_t>(fixup));
+      *(reinterpret_cast<std::uint32_t*>(ret) - 1) = static_cast<std::uint32_t>(ret - pointer);
+      return reinterpret_cast<address>(ret);
+    }
+    else
+      return ret_value;
+
+  }
+
+	void deallocate(address i_data, size_type i_size, size_type i_alignment = 0) {
 
 		auto measure = statistics::report_deallocate(i_size);
+
+    if (i_alignment)
+    {
+      i_size += i_alignment + 3;
+      std::uint32_t off_by = *(reinterpret_cast<std::uint32_t*>(i_data) - 1);
+      i_data               = reinterpret_cast<address>(reinterpret_cast<std::uint8_t*>(i_data) - off_by);
+    }
 
 		for (size_type id = static_cast<size_type>(arenas.size()) - 1;
 		     id >= current_arena; --id) {
 			if (in_range(arenas[id], i_data)) {
 				// merge back?
-				size_type new_left_over = arenas[id].left_over + i_size;
+
+        size_type new_left_over = arenas[id].left_over + i_size;
 				size_type offset        = (arenas[id].arena_size - new_left_over);
 				if (reinterpret_cast<std::uint8_t*>(arenas[id].buffer) + offset ==
 				    reinterpret_cast<std::uint8_t*>(i_data))

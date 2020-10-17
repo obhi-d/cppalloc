@@ -1,9 +1,19 @@
 ---
 Language: Cpp
-PenaltyReturnTypeOnItsOwnLine: '10000'
-TabWidth: '2'
-UseTab: ForIndentation
+PenaltyReturnTypeOnItsOwnLine: 10000
+TabWidth: 2
+UseTab: Never
 PointerAlignment: Left
 AlignConsecutiveAssignments: true
 AlignConsecutiveDeclarations: true
+AlignConsecutiveMacros: true
+AlignEscapedNewlines: Right
+AlignAfterOpenBracket: Align
+AlwaysBreakTemplateDeclarations: Yes
+AllowShortBlocksOnASingleLine: Never
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortLambdasOnASingleLine: Empty
+IncludeBlocks: Preserve
+BreakBeforeBraces: Allman
+ColumnLimit: 120
 ...

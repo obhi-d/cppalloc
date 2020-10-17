@@ -4,7 +4,7 @@
 TEST_CASE("Validate linear_allocator", "[linear_allocator]") {
 	using namespace cppalloc;
 	using allocator_t =
-	    linear_allocator<aligned_allocator<16, std::uint32_t, true>, true>;
+	    linear_allocator<default_allocator<std::uint32_t, true>, true>;
 	struct record {
 		void*         data;
 		std::uint32_t size;
@@ -22,7 +22,7 @@ TEST_CASE("Validate linear_allocator", "[linear_allocator]") {
 TEST_CASE("Validate linear_arena_allocator", "[linear_arena_allocator]") {
 	using namespace cppalloc;
 	using allocator_t =
-	    linear_arena_allocator<aligned_allocator<16, std::uint32_t, true>, true>;
+	    linear_arena_allocator<default_allocator<std::uint32_t, true>, true>;
 	struct record {
 		void*         data;
 		std::uint32_t size;
