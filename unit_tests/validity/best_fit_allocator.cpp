@@ -90,9 +90,10 @@ TEST_CASE("Validate best_fit_arena_allocator", "[best_fit_arena_allocator]")
       }
 
       r.size            = generator(gen);
-      r.offset          = allocator.allocate(r.size, handle, dice(gen) ? allocator_t::f_defrag : 0);
+      r.offset          = allocator.allocate(r.size, 16, handle, dice(gen) ? allocator_t::f_defrag : 0);
       allocated[handle] = r;
       manager.valids.push_back(handle);
+      assert(allocator.validate());
       CHECK(allocator.validate());
     }
     else
@@ -101,7 +102,7 @@ TEST_CASE("Validate best_fit_arena_allocator", "[best_fit_arena_allocator]")
       std::uint32_t                                chosen = choose(gen);
       std::uint32_t                                handle = manager.valids[chosen];
       auto&                                        rec    = allocated[handle];
-      allocator.deallocate(rec.offset, rec.size);
+      allocator.deallocate(rec.offset, rec.size, 16);
       manager.valids.erase(manager.valids.begin() + chosen);
       manager.invalids.push_back(handle);
       CHECK(allocator.validate());

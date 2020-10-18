@@ -283,9 +283,11 @@ inline void best_fit_arena_allocator<arena_manager, size_type, k_compute_stats>:
   auto& node_list = arena.blocks;
   auto  end       = node_list.end();
   auto  node =
-      std::lower_bound(node_list.begin(), end, i_address.offset, [](block_type block, size_type offset) -> bool {
-        return block.offset < offset;
+      std::upper_bound(node_list.begin(), end, i_address.offset, [](size_type offset, block_type block) -> bool {
+        return offset < block.offset;
       });
+  assert(node != node_list.begin());
+  --node;
   auto orig_node = node;
   assert(node != end);
   if (i_alignment)
@@ -543,7 +545,23 @@ inline float best_fit_arena_allocator<arena_manager, size_type, k_compute_stats>
 template <typename arena_manager, typename size_type, bool k_compute_stats>
 inline bool best_fit_arena_allocator<arena_manager, size_type, k_compute_stats>::validate() const
 {
-  size_type computed_size = 0;
+  size_type   computed_size = 0;
+  std::size_t free_count    = 0;
+  for (auto& p : arenas)
+  {
+    auto& node_list = p.blocks;
+    if (!node_list.empty())
+    {
+      for (size_type i = 0; i < node_list.size() - 1; ++i)
+      {
+        if (node_list[i].id == k_invalid_handle)
+          free_count++;
+      }
+    }
+  }
+
+  if (free_count != free_list.size())
+    return false;
 
   for (size_type i = 0; i < free_list.size(); ++i)
   {

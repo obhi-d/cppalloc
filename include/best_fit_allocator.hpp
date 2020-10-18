@@ -46,6 +46,19 @@ public:
     statistics::report_new_arena();
   };
 
+  explicit best_fit_allocator(size_type i_fixed_sz)
+  {
+    statistics::report_new_arena();
+
+    std::uint32_t slot       = get_slot();
+    block_type&   next_block = blocks[slot];
+    next_block.offset        = 0;
+    next_block.size          = i_fixed_sz;
+
+    insert<ordering_by::e_offset>(end<ordering_by::e_offset>().get_raw(), slot);
+    insert<ordering_by::e_size>(end<ordering_by::e_offset>().get_raw(), slot);
+  }
+
   //! Interface
   address allocate(size_type i_size, size_type i_alignment = 0);
   void    deallocate(address i_offset, size_type i_size, size_type i_alignment = 0);
@@ -200,7 +213,7 @@ private:
     [[nodiscard]] inline std::uint32_t next() const
     {
       // assert(index < owner.size());
-      return owner.get_block(*this).orderings[i_order].next;
+      return owner.get_block(index).orderings[i_order].next;
     }
 
     [[nodiscard]] inline std::uint32_t get_raw() const
@@ -227,7 +240,11 @@ private:
   template <ordering_by i_order>
   iterator<i_order> end();
   template <ordering_by i_order>
+  iterator<i_order> back();
+  template <ordering_by i_order>
   iterator<i_order> prev(const iterator<i_order>& i_other);
+  template <ordering_by i_order>
+  iterator<i_order> next(const iterator<i_order>& i_other);
 
   size_type alloc_from(const free_iterator& i_it, size_type i_size);
 
@@ -236,6 +253,8 @@ private:
   void reinsert_right(const free_iterator& i_it);
 
   void erase_entry(std::uint32_t i_it);
+
+  bool is_free(std::uint32_t i_it) const;
 
   std::uint32_t get_slot()
   {
@@ -371,10 +390,27 @@ best_fit_allocator<size_type, k_growable, k_compute_stats>::end()
 template <typename size_type, bool k_growable, bool k_compute_stats>
 template <detail::ordering_by i_order>
 inline typename best_fit_allocator<size_type, k_growable, k_compute_stats>::template iterator<i_order>
+best_fit_allocator<size_type, k_growable, k_compute_stats>::back()
+{
+  return iterator<i_order>(*this, ordering_lists[i_order].last);
+}
+
+template <typename size_type, bool k_growable, bool k_compute_stats>
+template <detail::ordering_by i_order>
+inline typename best_fit_allocator<size_type, k_growable, k_compute_stats>::template iterator<i_order>
 best_fit_allocator<size_type, k_growable, k_compute_stats>::prev(const iterator<i_order>& i_other)
 {
   return i_other.get_raw() == k_null ? iterator<i_order>(*this, ordering_lists[i_order].last)
                                      : iterator<i_order>(*this, i_other.prev());
+}
+
+template <typename size_type, bool k_growable, bool k_compute_stats>
+template <detail::ordering_by i_order>
+inline typename best_fit_allocator<size_type, k_growable, k_compute_stats>::template iterator<i_order>
+best_fit_allocator<size_type, k_growable, k_compute_stats>::next(const iterator<i_order>& i_other)
+{
+  return i_other.get_raw() == k_null ? iterator<i_order>(*this, ordering_lists[i_order].first)
+                                     : iterator<i_order>(*this, i_other.next());
 }
 
 template <typename size_type, bool k_growable, bool k_compute_stats>
@@ -441,14 +477,21 @@ inline size_type best_fit_allocator<size_type, k_growable, k_compute_stats>::all
   size_type     offset = blocks[block].offset;
   blocks[block].offset += i_size;
   blocks[block].size -= i_size;
+
+  auto slot           = get_slot();
+  blocks[slot].offset = offset;
+  blocks[slot].size   = i_size;
+  insert<ordering_by::e_offset>(block, slot);
+
   if (blocks[block].size > 0)
   {
     reinsert_left(i_it);
   }
   else
   {
-    erase_entry(i_it.get_raw());
+    erase_entry(block);
   }
+
   return offset;
 }
 
@@ -473,6 +516,15 @@ inline void best_fit_allocator<size_type, k_growable, k_compute_stats>::reinsert
 }
 
 template <typename size_type, bool k_growable, bool k_compute_stats>
+inline bool best_fit_allocator<size_type, k_growable, k_compute_stats>::is_free(std::uint32_t i_it) const
+{
+  if (blocks[i_it].orderings[ordering_by::e_size].next != k_null ||
+      blocks[i_it].orderings[ordering_by::e_size].prev != k_null || i_it == ordering_lists[ordering_by::e_size].first)
+    return true;
+  return false;
+}
+
+template <typename size_type, bool k_growable, bool k_compute_stats>
 inline void best_fit_allocator<size_type, k_growable, k_compute_stats>::erase_entry(std::uint32_t i_it)
 {
   erase<ordering_by::e_size>(i_it);
@@ -491,7 +543,7 @@ inline typename best_fit_allocator<size_type, k_growable, k_compute_stats>::addr
   if (i_alignment)
     i_size += fixup;
   size_type offset;
-  auto measure = statistics::report_allocate(i_size);
+  auto      measure = statistics::report_allocate(i_size);
 
   auto end_it = end<ordering_by::e_size>();
   auto found  = free_lookup(begin<ordering_by::e_size>(), end_it, i_size);
@@ -501,6 +553,13 @@ inline typename best_fit_allocator<size_type, k_growable, k_compute_stats>::addr
     {
       offset = total_size;
       total_size += i_size;
+
+      std::uint32_t slot       = get_slot();
+      block_type&   next_block = blocks[slot];
+      next_block.offset        = offset;
+      next_block.size          = i_size;
+
+      insert<ordering_by::e_offset>(end<ordering_by::e_offset>().get_raw(), slot);
     }
     else
       return k_invalid_offset;
@@ -511,17 +570,19 @@ inline typename best_fit_allocator<size_type, k_growable, k_compute_stats>::addr
 }
 
 template <typename size_type, bool k_growable, bool k_compute_stats>
-inline void best_fit_allocator<size_type, k_growable, k_compute_stats>::deallocate(address i_offset, size_type i_size, size_type i_alignment)
+inline void best_fit_allocator<size_type, k_growable, k_compute_stats>::deallocate(address i_offset, size_type i_size,
+                                                                                   size_type i_alignment)
 {
 
   auto measure = statistics::report_deallocate(i_size);
 
-  auto      begin_it = begin<ordering_by::e_offset>();
-  auto      end_it   = end<ordering_by::e_offset>();
-  auto      node = std::lower_bound(begin_it, end_it, i_offset, [](const block_type& block, size_type offset) -> bool {
-    return block.offset < offset;
-  });
-  assert(node != end_it);
+  auto begin_it = begin<ordering_by::e_offset>();
+  auto back_it  = back<ordering_by::e_offset>();
+  auto node     = std::lower_bound(begin_it, end<ordering_by::e_offset>(), i_offset,
+                               [](const block_type& block, size_type offset) -> bool {
+                                 return block.offset < offset;
+                               });
+  assert(node != end<ordering_by::e_offset>());
   // fixup offset based on alignment
   if (i_alignment)
   {
@@ -533,15 +594,17 @@ inline void best_fit_allocator<size_type, k_growable, k_compute_stats>::dealloca
   if (next_offset > total_size)
     total_size = next_offset;
   decltype(node) prev_free(*this);
-  if (node != begin_it && (prev_free = prev(node))->next_offset() == i_offset)
+  decltype(node) next_free(*this);
+  if (node != begin_it && is_free((prev_free = prev(node)).get_raw()))
   {
-    if (node != end_it && next_offset == node->offset)
+    if (node != back_it && is_free((next_free = next(node)).get_raw()))
     {
       // merge prev_free + this + node
       free_iterator prev_free_list_it(*this, prev_free.get_raw());
       prev_free->size += i_size;
-      prev_free->size += node->size;
-      erase_entry(node.get_raw());
+      prev_free->size += next_free->size;
+      erase<ordering_by::e_offset>(node.get_raw());
+      erase_entry(next_free.get_raw());
       reinsert_right(prev_free_list_it);
     }
     else
@@ -549,30 +612,27 @@ inline void best_fit_allocator<size_type, k_growable, k_compute_stats>::dealloca
       // merge prev_free + this
       free_iterator prev_free_list_it(*this, prev_free.get_raw());
       prev_free->size += i_size;
+      erase<ordering_by::e_offset>(node.get_raw());
       reinsert_right(prev_free_list_it);
     }
   }
-  else if (node != end_it && next_offset == node->offset)
+  else if (node != back_it && is_free((next_free = next(node)).get_raw()))
   {
     // merge this + node
-    node->offset = i_offset;
-    node->size += i_size;
-    free_iterator node_fli(*this, node.get_raw());
+    next_free->offset = i_offset;
+    next_free->size += i_size;
+    erase<ordering_by::e_offset>(node.get_raw());
+    free_iterator node_fli(*this, next_free.get_raw());
     reinsert_right(node_fli);
   }
   else
   {
     // new node
-    auto          begin_it   = begin<ordering_by::e_size>();
-    auto          end_it     = end<ordering_by::e_size>();
-    std::uint32_t slot       = get_slot();
-    block_type&   next_block = blocks[slot];
-    next_block.offset        = i_offset;
-    next_block.size          = i_size;
+    auto begin_it = begin<ordering_by::e_size>();
+    auto end_it   = end<ordering_by::e_size>();
 
     auto it = free_lookup(begin_it, end_it, i_offset, i_size);
-    insert<ordering_by::e_offset>(node.get_raw(), slot);
-    insert<ordering_by::e_size>(it.get_raw(), slot);
+    insert<ordering_by::e_size>(it.get_raw(), node.get_raw());
   }
 }
 
