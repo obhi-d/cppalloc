@@ -61,8 +61,8 @@ inline void print_final_stats()
   detail::default_allocator_statistics_instance.print();
 }
 
-template <typename size_arg = std::uint32_t, bool k_compute_stats = false, bool k_track_memory = false,
-          typename debug_tracer = std::monostate>
+template <typename size_arg = std::uint32_t, std::size_t k_default_alignment = 0, bool k_compute_stats = false,
+          bool k_track_memory = false, typename debug_tracer = std::monostate>
 struct CPPALLOC_EMPTY_BASES default_allocator
     : detail::default_alloc_statistics<k_compute_stats>,
       detail::memory_tracker<default_allocator_tag, debug_tracer, k_track_memory>
@@ -74,8 +74,12 @@ struct CPPALLOC_EMPTY_BASES default_allocator
   using tracker    = detail::memory_tracker<default_allocator_tag, debug_tracer, k_track_memory>;
 
   default_allocator() {}
-  default_allocator(default_allocator<size_arg, k_compute_stats, k_track_memory, debug_tracer> const&) {}
-  default_allocator& operator=(default_allocator<size_arg, k_compute_stats, k_track_memory, debug_tracer> const&)
+  default_allocator(
+      default_allocator<size_arg, k_default_alignment, k_compute_stats, k_track_memory, debug_tracer> const&)
+  {
+  }
+  default_allocator& operator=(
+      default_allocator<size_arg, k_default_alignment, k_compute_stats, k_track_memory, debug_tracer> const&)
   {
     return *this;
   }
@@ -83,6 +87,7 @@ struct CPPALLOC_EMPTY_BASES default_allocator
   inline static address allocate(size_type i_sz, size_type i_alignment = 0)
   {
     auto measure = statistics::report_allocate(i_sz);
+    i_alignment  = std::max<size_type>(i_alignment, static_cast<size_type>(k_default_alignment));
     return tracker::when_allocate(i_alignment ?
 #ifdef _MSC_VER
                                               _aligned_malloc(i_sz, i_alignment)
@@ -97,7 +102,7 @@ struct CPPALLOC_EMPTY_BASES default_allocator
   {
     auto  measure = statistics::report_deallocate(i_sz);
     void* fixup   = tracker::when_deallocate(i_addr, i_sz);
-    if (i_alignment)
+    if (i_alignment || k_default_alignment)
 #ifdef _MSC_VER
       _aligned_free(fixup);
 #else
@@ -105,6 +110,11 @@ struct CPPALLOC_EMPTY_BASES default_allocator
 #endif
     else
       std::free(fixup);
+  }
+
+  static constexpr void* null()
+  {
+    return nullptr;
   }
 };
 

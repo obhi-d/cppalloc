@@ -43,6 +43,7 @@ TEST_CASE("Validate best_fit_arena_allocator", "[best_fit_arena_allocator]")
   {
     address_t     offset;
     std::uint32_t size;
+    std::uint32_t alignment;
   };
 
   struct example_manager : arena_manager_adapter
@@ -86,7 +87,7 @@ TEST_CASE("Validate best_fit_arena_allocator", "[best_fit_arena_allocator]")
       else
       {
         handle = static_cast<std::uint32_t>(allocated.size());
-        allocated.resize(handle + 1);
+        allocated.resize(static_cast<std::vector<record, std::allocator<record>>::size_type>(handle) + 1);
       }
 
       r.size            = generator(gen);

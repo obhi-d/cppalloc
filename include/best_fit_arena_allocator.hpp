@@ -64,6 +64,7 @@ class best_fit_arena_allocator : public detail::statistics<best_fit_arena_alloca
 public:
   using address = detail::bf_address_type<size_type>;
   using tag     = best_fit_arena_allocator_tag;
+
   enum : size_type
   {
     k_invalid_offset = std::numeric_limits<size_type>::max(),
@@ -86,6 +87,7 @@ private:
   {
     size_type offset;
     size_type id;
+    size_type alignment;
   };
 
   using block_list    = std::vector<block_type>;
@@ -104,6 +106,11 @@ public:
                    option_flags i_options = 0);
   //! Deallocate, size is optional
   void deallocate(address i_address, size_type i_size, size_type i_alignment = 0);
+
+  static constexpr address null()
+  {
+    return {k_invalid_offset, k_invalid_page};
+  }
 
   //! Helpers
   size_type get_free_size() const;
@@ -215,7 +222,7 @@ inline typename best_fit_arena_allocator<arena_manager, size_type, k_compute_sta
 
   auto fixup = i_alignment - 1;
   if (i_alignment)
-    i_size += fixup;
+    i_size += i_alignment;
 
   if (i_size > get_max_free_block_size())
   {
@@ -236,22 +243,29 @@ inline typename best_fit_arena_allocator<arena_manager, size_type, k_compute_sta
 
   if (found == end)
   {
-    return {k_invalid_offset, k_invalid_page};
+    return null();
   }
 
-  size_type offset = (*found).offset;
+  size_type offset       = (*found).offset;
+  size_type fixed_offset = ((offset + fixup) & ~fixup);
+  size_type arena_num    = found->arena;
+
+  // We dont need a fixup if offset and fixed_offset is same
+  if (i_alignment && fixed_offset == offset)
+    i_size -= i_alignment;
+
   found->size -= i_size;
-  size_type arena_num = found->arena;
-  auto&     arena     = arenas[arena_num];
-  auto&     node_list = arena.blocks;
-  auto      al_end    = node_list.end();
-  auto      it =
+  auto& arena     = arenas[arena_num];
+  auto& node_list = arena.blocks;
+  auto  al_end    = node_list.end();
+  auto  it =
       std::lower_bound(node_list.begin(), al_end, (*found).offset, [](block_type block, size_type offset) -> bool {
         return block.offset < offset;
       });
 
   // set allocated to right size, increment it
-  it->id = i_user_handle;
+  it->id        = i_user_handle;
+  id->alignment = i_alignment;
   if (found->size > 0)
   {
     size_type num_allocated = static_cast<size_type>(node_list.size());
@@ -268,7 +282,7 @@ inline typename best_fit_arena_allocator<arena_manager, size_type, k_compute_sta
   }
   arena.free_size -= i_size;
   free_size -= i_size;
-  return {i_alignment ? ((offset + fixup) & ~fixup) : offset, arena_num};
+  return {fixed_offset, arena_num};
 }
 
 template <typename arena_manager, typename size_type, bool k_compute_stats>
@@ -279,7 +293,9 @@ inline void best_fit_arena_allocator<arena_manager, size_type, k_compute_stats>:
 
   auto measure = statistics::report_deallocate(i_size);
 
-  auto& arena     = arenas[i_address.arena];
+  size_type arena_num = i_address.arena;
+
+  auto& arena     = arenas[arena_num];
   auto& node_list = arena.blocks;
   auto  end       = node_list.end();
   auto  node =
@@ -290,10 +306,11 @@ inline void best_fit_arena_allocator<arena_manager, size_type, k_compute_stats>:
   --node;
   auto orig_node = node;
   assert(node != end);
-  if (i_alignment)
+
+  if (i_alignment && (*node).offset != i_address.offset)
   {
     i_address.offset = (*node).offset;
-    i_size += i_alignment - 1;
+    i_size += i_alignment;
   }
 
   assert(node->offset == i_address.offset);
@@ -312,6 +329,7 @@ inline void best_fit_arena_allocator<arena_manager, size_type, k_compute_stats>:
 
   if (node != node_list.begin() && (prev = std::prev(node))->id == k_invalid_handle)
   {
+    orig_node         = prev;
     size_type prev_sz = node->offset - prev->offset;
     left_removal      = locator_type{prev->offset, prev_sz};
     merges++;
@@ -434,12 +452,14 @@ inline void best_fit_arena_allocator<arena_manager, size_type, k_compute_stats>:
           continue;
         }
         // dispatch
-        size_type     move_offset = node_list[occ].offset;
-        size_type     cur_offset  = node_list[i].offset;
-        size_type     last_offset = node_list[last].offset;
-        size_type     size        = cur_offset - move_offset;
-        auto          it          = node_list.begin() + occ;
-        auto          it_end      = node_list.begin() + i;
+        size_type move_offset = node_list[occ].offset;
+        size_type move_align  = node_list[occ].alignment;
+        size_type cur_offset  = node_list[i].offset;
+        size_type last_offset = node_list[last].offset;
+
+        size_type     size   = cur_offset - move_offset;
+        auto          it     = node_list.begin() + occ;
+        auto          it_end = node_list.begin() + i;
         move_iterator mv(it, it_end, move_offset - last_offset);
         manager.move_memory({it->offset, p}, {last_offset, p}, size, mv);
 

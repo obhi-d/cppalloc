@@ -63,6 +63,11 @@ public:
   address allocate(size_type i_size, size_type i_alignment = 0);
   void    deallocate(address i_offset, size_type i_size, size_type i_alignment = 0);
 
+  static constexpr address null()
+  {
+    return k_invalid_offset;
+  }
+
   //! Unittst
   bool validate();
 

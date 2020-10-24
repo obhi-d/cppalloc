@@ -53,6 +53,7 @@
 
 namespace cppalloc
 {
+constexpr std::uint32_t safety_offset = alignof(void*);
 namespace detail
 {
 inline void print_debug_info(std::string const& s)
@@ -141,6 +142,7 @@ struct statistics<tag_arg, true, base_arg, k_print> : public base_arg
   std::atomic_uint64_t allocation         = 0;
   std::atomic_uint64_t deallocation_count = 0;
   std::atomic_uint64_t allocation_count   = 0;
+  std::atomic_uint64_t allocator_data     = 0;
   timer_t              allocation_timing;
   timer_t              deallocation_timing;
   bool                 stats_printed = false;

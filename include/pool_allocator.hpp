@@ -27,35 +27,41 @@ public:
   pool_allocator(pool_allocator const& i_other) = delete;
   pool_allocator(pool_allocator&& i_other)      = default;
 
+  inline constexpr static address null()
+  {
+    return underlying_allocator::null();
+  }
+
   inline address allocate(size_type i_size, size_type i_alignment = 0)
   {
     auto fixup = i_alignment - 1;
     if (i_alignment && ((k_atom_size < i_alignment) || (k_atom_size & fixup)))
-      i_size += fixup + 4;
+      i_size += i_alignment + 4;
 
     size_type i_count = (i_size + k_atom_size - 1) / k_atom_size;
+
+    if constexpr (k_compute_stats)
+    {
+      if (i_alignment && ((k_atom_size < i_alignment) || (k_atom_size & fixup)))
+      {
+        // Account for the missing atoms
+        auto      real_size = i_size - i_alignment - 4;
+        size_type count     = (real_size + k_atom_size - 1) / k_atom_size;
+        this->statistics::allocator_data += i_count - count;
+      }
+    }
+
     if (i_count > k_atom_count)
       return underlying_allocator::allocate(i_size, i_alignment);
 
     address ret_value;
     auto    measure = statistics::report_allocate(i_size);
-    if (i_count == 1)
-    {
-      if (!solo)
-      {
-        ret_value = consume(1);
-      }
-      ret_value = consume();
-    }
-    else
-    {
-      ret_value = consume(i_count);
-    }
+    ret_value       = (i_count == 1) ? ((!solo) ? consume(1) : consume()) : consume(i_count);
 
     if (i_alignment && ((k_atom_size < i_alignment) || (k_atom_size & fixup)))
     {
       auto pointer = reinterpret_cast<std::uintptr_t>(ret_value);
-      auto ret     = ((pointer + 4 + static_cast<std::uintptr_t>(fixup)) + ~static_cast<std::uintptr_t>(fixup));
+      auto ret     = ((pointer + 4 + static_cast<std::uintptr_t>(fixup)) & ~static_cast<std::uintptr_t>(fixup));
       *(reinterpret_cast<std::uint32_t*>(ret) - 1) = static_cast<std::uint32_t>(ret - pointer);
       return reinterpret_cast<address>(ret);
     }
@@ -69,12 +75,24 @@ public:
     address orig_ptr = i_ptr;
     if (i_alignment && ((k_atom_size < i_alignment) || (k_atom_size & fixup)))
     {
-      i_size += fixup + 4;
+      i_size += i_alignment + 4;
       std::uint32_t off_by = *(reinterpret_cast<std::uint32_t*>(i_ptr) - 1);
       i_ptr                = reinterpret_cast<address>(reinterpret_cast<std::uint8_t*>(i_ptr) - off_by);
     }
 
     size_type i_count = (i_size + k_atom_size - 1) / k_atom_size;
+
+    if constexpr (k_compute_stats)
+    {
+      if (i_alignment && ((k_atom_size < i_alignment) || (k_atom_size & fixup)))
+      {
+        // Account for the missing atoms
+        auto      real_size = i_size - i_alignment - 4;
+        size_type count     = (real_size + k_atom_size - 1) / k_atom_size;
+        this->statistics::allocator_data -= (i_count - count);
+      }
+    }
+
     if (i_count > k_atom_count)
       underlying_allocator::deallocate(orig_ptr, i_size, i_alignment);
     else
@@ -400,6 +418,13 @@ private:
     return count;
   }
 
+  std::uint32_t get_missing_atoms() const
+  {
+    if constexpr (k_compute_stats)
+      return this->statistics::allocator_data;
+    return 0;
+  }
+
   std::uint32_t get_total_arena_count() const
   {
     std::uint32_t count = 0;
@@ -424,10 +449,13 @@ public:
   {
     std::uint32_t rec_count = 0;
     for (auto& rec : records)
-      rec_count += rec.count;
+    {
+      if (rec.count <= k_atom_count)
+        rec_count += rec.count;
+    }
 
     std::uint32_t arena_count = get_total_arena_count();
-    if (rec_count + get_total_free_count() != arena_count * k_atom_count)
+    if (rec_count + get_total_free_count() + get_missing_atoms() != arena_count * k_atom_count)
       return false;
 
     if (arena_count != this->statistics::get_arenas_allocated())
