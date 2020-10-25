@@ -471,11 +471,11 @@ inline void best_fit_arena_allocator<arena_manager, size_type, k_compute_stats>:
         }
         using signed_type = std::make_signed_t<size_type>;
         // dispatch
-        size_type move_offset       = node_list[occ].offset;
-        size_type move_offset_fixed = offset_fixup(move_offset, node_list[occ].align_mask);
-        size_type cur_offset        = node_list[i].offset;
-        size_type last_offset       = node_list[last].offset;
-        size_type last_offset_fixed = offset_fixup(cur_offset, node_list[occ].align_mask);
+        size_type   move_offset       = node_list[occ].offset;
+        size_type   move_offset_fixed = offset_fixup(move_offset, node_list[occ].align_mask);
+        size_type   cur_offset        = node_list[i].offset;
+        size_type   last_offset       = node_list[last].offset;
+        size_type   last_offset_fixed = offset_fixup(cur_offset, node_list[occ].align_mask);
         signed_type adjustment =
             (signed_type)(last_offset_fixed - last_offset) - (signed_type)(move_offset_fixed - move_offset);
         size_type     size   = cur_offset - move_offset_fixed;
@@ -486,7 +486,7 @@ inline void best_fit_arena_allocator<arena_manager, size_type, k_compute_stats>:
 
         for (size_type cpy = occ, l = last; cpy < i; ++cpy)
         {
-          size_type size       = node_list[cpy + 1].offset - node_list[cpy].offset;
+          size_type size       = (node_list[cpy + 1].offset - node_list[cpy].offset) + adjustment;
           size_type id         = node_list[cpy].id;
           size_type align_mask = node_list[cpy].align_mask;
 

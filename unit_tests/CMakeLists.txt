@@ -5,7 +5,7 @@ include(ExternalProject)
 
 ExternalProject_Add(Catch2
   GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-  PREFIX ${CMAKE_CURRENT_BINARY_DIR}/Catch2
+  PREFIX ${CMAKE_SOURCE_DIR}/external/Catch2
   STEP_TARGETS install 
   CMAKE_ARGS 
   	-DCMAKE_INSTALL_PREFIX=${CMAKE_SOURCE_DIR}/out/external/install

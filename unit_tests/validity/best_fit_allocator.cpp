@@ -70,9 +70,10 @@ TEST_CASE("Validate best_fit_arena_allocator", "[best_fit_arena_allocator]")
   std::minstd_rand                             gen;
   std::bernoulli_distribution                  dice(0.7);
   std::uniform_int_distribution<std::uint32_t> generator(1, 10000);
+  std::uniform_int_distribution<std::uint32_t> generator2(1, 5);
 
   std::vector<record>& allocated = manager.allocated;
-  for (std::uint32_t allocs = 0; allocs < 10000; ++allocs)
+  for (std::uint32_t allocs = 0; allocs < 100000; ++allocs)
   {
     if (dice(gen) || manager.valids.size() == 0)
     {
@@ -90,8 +91,10 @@ TEST_CASE("Validate best_fit_arena_allocator", "[best_fit_arena_allocator]")
         allocated.resize(static_cast<std::vector<record, std::allocator<record>>::size_type>(handle) + 1);
       }
 
-      r.size            = generator(gen);
-      r.offset          = allocator.allocate(r.size, 16, handle, dice(gen) ? allocator_t::f_defrag : 0);
+      r.size      = generator(gen);
+      r.alignment = 1 << generator2(gen);
+      r.offset    = allocator.allocate(r.size, r.alignment, handle, dice(gen) ? allocator_t::f_defrag : 0);
+      CHECK((r.offset.offset & (r.alignment - 1)) == 0);
       allocated[handle] = r;
       manager.valids.push_back(handle);
       assert(allocator.validate());
@@ -103,7 +106,7 @@ TEST_CASE("Validate best_fit_arena_allocator", "[best_fit_arena_allocator]")
       std::uint32_t                                chosen = choose(gen);
       std::uint32_t                                handle = manager.valids[chosen];
       auto&                                        rec    = allocated[handle];
-      allocator.deallocate(rec.offset, rec.size, 16);
+      allocator.deallocate(rec.offset, rec.size, rec.alignment);
       manager.valids.erase(manager.valids.begin() + chosen);
       manager.invalids.push_back(handle);
       CHECK(allocator.validate());
