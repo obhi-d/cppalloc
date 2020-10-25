@@ -284,7 +284,7 @@ inline typename best_fit_arena_allocator<arena_manager, size_type, k_compute_sta
 
   // set allocated to right size, increment it
   it->id         = i_user_handle;
-  id->align_mask = align_mask;
+  it->align_mask = align_mask;
   if (found->size > 0)
   {
     size_type num_allocated = static_cast<size_type>(node_list.size());
@@ -475,7 +475,7 @@ inline void best_fit_arena_allocator<arena_manager, size_type, k_compute_stats>:
         size_type   move_offset_fixed = offset_fixup(move_offset, node_list[occ].align_mask);
         size_type   cur_offset        = node_list[i].offset;
         size_type   last_offset       = node_list[last].offset;
-        size_type   last_offset_fixed = offset_fixup(cur_offset, node_list[occ].align_mask);
+        size_type   last_offset_fixed = offset_fixup(last_offset, node_list[occ].align_mask);
         signed_type adjustment =
             (signed_type)(last_offset_fixed - last_offset) - (signed_type)(move_offset_fixed - move_offset);
         size_type     size   = cur_offset - move_offset_fixed;
@@ -492,6 +492,7 @@ inline void best_fit_arena_allocator<arena_manager, size_type, k_compute_stats>:
 
           node_list[l++] = block_type{last_offset, id, align_mask};
           last_offset += size;
+          adjustment = 0;
         }
 
         last                   = i - (occ - last);
@@ -534,7 +535,7 @@ inline void best_fit_arena_allocator<arena_manager, size_type, k_compute_stats>:
 
   std::sort(new_free_list.begin(), new_free_list.end());
   free_list = std::move(new_free_list);
-  assert(total_remove_size == free_size);
+  free_size = total_remove_size;
 }
 
 template <typename arena_manager, typename size_type, bool k_compute_stats>

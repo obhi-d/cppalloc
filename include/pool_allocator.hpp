@@ -421,7 +421,7 @@ private:
   std::uint32_t get_missing_atoms() const
   {
     if constexpr (k_compute_stats)
-      return this->statistics::allocator_data;
+      return static_cast<std::uint32_t>(this->statistics::allocator_data);
     return 0;
   }
 

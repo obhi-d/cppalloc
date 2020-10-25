@@ -5,6 +5,7 @@ include(ExternalProject)
 
 ExternalProject_Add(Catch2
   GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+  GIT_TAG origin/v2.x
   PREFIX ${CMAKE_SOURCE_DIR}/external/Catch2
   STEP_TARGETS install 
   CMAKE_ARGS 

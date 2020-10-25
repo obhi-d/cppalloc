@@ -70,7 +70,7 @@ TEST_CASE("Validate best_fit_arena_allocator", "[best_fit_arena_allocator]")
   std::minstd_rand                             gen;
   std::bernoulli_distribution                  dice(0.7);
   std::uniform_int_distribution<std::uint32_t> generator(1, 10000);
-  std::uniform_int_distribution<std::uint32_t> generator2(1, 5);
+  std::uniform_int_distribution<std::uint32_t> generator2(1, 10);
 
   std::vector<record>& allocated = manager.allocated;
   for (std::uint32_t allocs = 0; allocs < 100000; ++allocs)

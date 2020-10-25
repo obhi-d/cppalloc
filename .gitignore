@@ -36,3 +36,4 @@
 **/out
 /.vs
 *.profraw
+/external/Catch2
