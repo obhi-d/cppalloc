@@ -87,8 +87,24 @@ private:
   {
     size_type offset;
     size_type id;
-    size_type alignment;
+    size_type align_mask; // -1
   };
+
+  static size_type offset_delta(size_type offset, size_type mask)
+  {
+    size_type fixed_offset = ((offset + mask) & ~mask);
+    return fixed_offset - offset;
+  }
+
+  static size_type offset_fixup(size_type offset, size_type mask)
+  {
+    return ((offset + mask) & ~mask);
+  }
+
+  static size_type offset_fixup(block_type const& block)
+  {
+    return ((block.offset + block.align_mask) & ~block.align_mask);
+  }
 
   using block_list    = std::vector<block_type>;
   using block_list_it = typename block_list::iterator;
@@ -220,9 +236,12 @@ inline typename best_fit_arena_allocator<arena_manager, size_type, k_compute_sta
     return {0, add_arena(i_user_handle, i_size)};
   }
 
-  auto fixup = i_alignment - 1;
+  size_type align_mask = 0;
   if (i_alignment)
+  {
+    align_mask = i_alignment - 1;
     i_size += i_alignment;
+  }
 
   if (i_size > get_max_free_block_size())
   {
@@ -247,11 +266,11 @@ inline typename best_fit_arena_allocator<arena_manager, size_type, k_compute_sta
   }
 
   size_type offset       = (*found).offset;
-  size_type fixed_offset = ((offset + fixup) & ~fixup);
+  size_type fixed_offset = ((offset + align_mask) & ~align_mask);
   size_type arena_num    = found->arena;
 
-  // We dont need a fixup if offset and fixed_offset is same
-  if (i_alignment && fixed_offset == offset)
+  // We dont need a align_mask if offset and fixed_offset is same
+  if (fixed_offset == offset)
     i_size -= i_alignment;
 
   found->size -= i_size;
@@ -264,8 +283,8 @@ inline typename best_fit_arena_allocator<arena_manager, size_type, k_compute_sta
       });
 
   // set allocated to right size, increment it
-  it->id        = i_user_handle;
-  id->alignment = i_alignment;
+  it->id         = i_user_handle;
+  id->align_mask = align_mask;
   if (found->size > 0)
   {
     size_type num_allocated = static_cast<size_type>(node_list.size());
@@ -306,14 +325,13 @@ inline void best_fit_arena_allocator<arena_manager, size_type, k_compute_stats>:
   --node;
   auto orig_node = node;
   assert(node != end);
-
-  if (i_alignment && (*node).offset != i_address.offset)
+  assert(i_address.offset == offset_fixup(*node));
+  if (i_alignment && node->offset != i_address.offset)
   {
-    i_address.offset = (*node).offset;
+    i_address.offset = node->offset;
     i_size += i_alignment;
   }
 
-  assert(node->offset == i_address.offset);
   // last index is not used
   block_list_it next = std::next(node);
   size_type     size = next->offset - node->offset;
@@ -451,23 +469,28 @@ inline void best_fit_arena_allocator<arena_manager, size_type, k_compute_stats>:
           i++;
           continue;
         }
+        using signed_type = std::make_signed_t<size_type>;
         // dispatch
-        size_type move_offset = node_list[occ].offset;
-        size_type move_align  = node_list[occ].alignment;
-        size_type cur_offset  = node_list[i].offset;
-        size_type last_offset = node_list[last].offset;
-
-        size_type     size   = cur_offset - move_offset;
+        size_type move_offset       = node_list[occ].offset;
+        size_type move_offset_fixed = offset_fixup(move_offset, node_list[occ].align_mask);
+        size_type cur_offset        = node_list[i].offset;
+        size_type last_offset       = node_list[last].offset;
+        size_type last_offset_fixed = offset_fixup(cur_offset, node_list[occ].align_mask);
+        signed_type adjustment =
+            (signed_type)(last_offset_fixed - last_offset) - (signed_type)(move_offset_fixed - move_offset);
+        size_type     size   = cur_offset - move_offset_fixed;
         auto          it     = node_list.begin() + occ;
         auto          it_end = node_list.begin() + i;
-        move_iterator mv(it, it_end, move_offset - last_offset);
-        manager.move_memory({it->offset, p}, {last_offset, p}, size, mv);
+        move_iterator mv(it, it_end, move_offset_fixed - last_offset_fixed);
+        manager.move_memory({move_offset_fixed, p}, {last_offset_fixed, p}, size, mv);
 
         for (size_type cpy = occ, l = last; cpy < i; ++cpy)
         {
-          size_type size = node_list[cpy + 1].offset - node_list[cpy].offset;
-          size_type id   = node_list[cpy].id;
-          node_list[l++] = block_type{last_offset, id};
+          size_type size       = node_list[cpy + 1].offset - node_list[cpy].offset;
+          size_type id         = node_list[cpy].id;
+          size_type align_mask = node_list[cpy].align_mask;
+
+          node_list[l++] = block_type{last_offset, id, align_mask};
           last_offset += size;
         }
 
