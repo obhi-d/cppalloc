@@ -168,17 +168,22 @@ struct vlist
     return last;
   }
 
+  inline void push_back(Container& cont, std::uint32_t node)
+  {
+    if (last != k_null_32)
+      Accessor::node(cont, last).next = node;
+    if (first == k_null_32)
+      first = node;
+    Accessor::node(cont, node).prev = last;
+    last                            = node;
+  }
+
   inline void insert(Container& cont, std::uint32_t loc, std::uint32_t node)
   {
     // end?
     if (loc == k_null_32)
     {
-      if (last != k_null_32)
-        Accessor::node(cont, last).next = node;
-      if (first == k_null_32)
-        first = node;
-      Accessor::node(cont, node).prev = last;
-      last                            = node;
+      push_back(cont, node);
     }
     else
     {

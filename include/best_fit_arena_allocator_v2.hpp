@@ -19,9 +19,10 @@ class best_fit_arena_allocator_v2 : public detail::statistics<detail::best_fit_a
 {
   struct block
   {
+    std::uint64_t data;
     list_node     order[ordering_by::k_count];
     size_type     offset;
-    std::uint64_t data;
+    std::uint32_t arena;
   };
 
   using block_bank = detail::table<block>;
@@ -59,7 +60,8 @@ class best_fit_arena_allocator_v2 : public detail::statistics<detail::best_fit_a
   {
     block_list    blocks;
     list_node     order;
-    std::uint64_t data;
+    size_type     size;
+    std::uint64_t data = k_null_64;
   };
 
   struct arena_accessor
@@ -98,12 +100,7 @@ public:
 
   using std::uint32_t = option_flags;
 
-  struct address
-  {
-    size_type     offset;
-    std::uint32_t arena;
-    std::uint32_t block;
-  };
+  using std::uint32_t = address;
 
   //! Inteface
   template <typename... Args>
@@ -117,6 +114,8 @@ public:
   void deallocate(address i_address, size_type i_size, size_type i_alignment = 0);
 
 private:
+  std::uint32_t add_arena(size_type i_handle, size_type i_arena_size);
+
   block_bank     blocks;
   arena_bank     arenas;
   arena_list     arena_ordering;
@@ -134,6 +133,15 @@ inline best_fit_arena_allocator_v2<arena_manager, size_type, k_compute_stats>::b
 }
 
 template <typename arena_manager, typename size_type, bool k_compute_stats>
+inline std::uint32_t best_fit_arena_allocator_v2<arena_manager, size_type, k_compute_stats>::add_arena(
+    size_type i_handle, size_type i_arena_size)
+{
+  std::uint32_t arena_id = arenas.emplace({});
+  arena_ordering.push_back(arena_id);
+  return arena_id;
+}
+
+template <typename arena_manager, typename size_type, bool k_compute_stats>
 inline best_fit_arena_allocator_v2<arena_manager, size_type, k_compute_stats>::address best_fit_arena_allocator_v2<
     arena_manager, size_type, k_compute_stats>::allocate(size_type i_size, size_type i_alignment,
                                                          std::uint64_t i_user_handle, option_flags i_options)
@@ -141,7 +149,7 @@ inline best_fit_arena_allocator_v2<arena_manager, size_type, k_compute_stats>::a
   auto measure = statistics::report_allocate(i_size);
 
   assert(i_user_handle != k_null_64);
-  if (i_options & f_dedicated_arena)
+  if (i_options & f_dedicated_arena || i_size >= arena_size)
   {
     return {0, add_arena(i_user_handle, i_size)};
   }

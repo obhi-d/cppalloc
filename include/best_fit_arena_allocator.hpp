@@ -231,9 +231,9 @@ inline typename best_fit_arena_allocator<arena_manager, size_type, k_compute_sta
   auto measure = statistics::report_allocate(i_size);
 
   assert(i_user_handle != k_invalid_handle);
-  if (i_options & f_dedicated_arena || i_size > arena_size)
+  if (i_options & f_dedicated_arena || i_size >= arena_size)
   {
-    return {0, add_arena(i_user_handle, i_size + i_alignment)};
+    return {0, add_arena(i_user_handle, i_size)};
   }
 
   size_type align_mask = 0;
@@ -467,12 +467,12 @@ inline void best_fit_arena_allocator<arena_manager, size_type, k_compute_stats>:
         }
         using signed_type = std::make_signed_t<size_type>;
         // dispatch
-        size_type   move_offset       = node_list[occ].offset;
-        size_type   cur_offset        = node_list[i].offset;
-        size_type   last_offset       = node_list[last].offset;
-        size_type     size   = cur_offset - move_offset;
-        auto          it     = node_list.begin() + occ;
-        auto          it_end = node_list.begin() + i;
+        size_type     move_offset = node_list[occ].offset;
+        size_type     cur_offset  = node_list[i].offset;
+        size_type     last_offset = node_list[last].offset;
+        size_type     size        = cur_offset - move_offset;
+        auto          it          = node_list.begin() + occ;
+        auto          it_end      = node_list.begin() + i;
         move_iterator mv(it, it_end, move_offset - last_offset);
         manager.move_memory({move_offset, p}, {last_offset, p}, size, mv);
 
