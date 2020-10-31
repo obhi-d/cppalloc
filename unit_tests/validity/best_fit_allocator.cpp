@@ -60,7 +60,9 @@ TEST_CASE("Validate best_fit_arena_allocator", "[best_fit_arena_allocator]")
       std::uint32_t index;
       while (iterator.has_next(index))
       {
-        iterator.modify_offset(allocated[index].offset.offset);
+        record& rec = allocated[index];
+        iterator.modify_offset(rec.offset.offset);
+        assert((rec.offset.offset & (rec.alignment - 1)) == 0);
       }
     }
   };
@@ -73,7 +75,7 @@ TEST_CASE("Validate best_fit_arena_allocator", "[best_fit_arena_allocator]")
   std::uniform_int_distribution<std::uint32_t> generator2(1, 10);
 
   std::vector<record>& allocated = manager.allocated;
-  for (std::uint32_t allocs = 0; allocs < 100000; ++allocs)
+  for (std::uint32_t allocs = 0; allocs < 10000; ++allocs)
   {
     if (dice(gen) || manager.valids.size() == 0)
     {

@@ -240,7 +240,7 @@ inline typename best_fit_arena_allocator<arena_manager, size_type, k_compute_sta
   if (i_alignment)
   {
     align_mask = i_alignment - 1;
-    i_size += i_alignment;
+    i_size += align_mask;
   }
 
   if (i_size > get_max_free_block_size())
@@ -268,10 +268,6 @@ inline typename best_fit_arena_allocator<arena_manager, size_type, k_compute_sta
   size_type offset       = (*found).offset;
   size_type fixed_offset = ((offset + align_mask) & ~align_mask);
   size_type arena_num    = found->arena;
-
-  // We dont need a align_mask if offset and fixed_offset is same
-  if (fixed_offset == offset)
-    i_size -= i_alignment;
 
   found->size -= i_size;
   auto& arena     = arenas[arena_num];
@@ -326,10 +322,10 @@ inline void best_fit_arena_allocator<arena_manager, size_type, k_compute_stats>:
   auto orig_node = node;
   assert(node != end);
   assert(i_address.offset == offset_fixup(*node));
-  if (i_alignment && node->offset != i_address.offset)
+  if (i_alignment)
   {
     i_address.offset = node->offset;
-    i_size += i_alignment;
+    i_size += i_alignment - 1;
   }
 
   // last index is not used
@@ -472,27 +468,22 @@ inline void best_fit_arena_allocator<arena_manager, size_type, k_compute_stats>:
         using signed_type = std::make_signed_t<size_type>;
         // dispatch
         size_type   move_offset       = node_list[occ].offset;
-        size_type   move_offset_fixed = offset_fixup(move_offset, node_list[occ].align_mask);
         size_type   cur_offset        = node_list[i].offset;
         size_type   last_offset       = node_list[last].offset;
-        size_type   last_offset_fixed = offset_fixup(last_offset, node_list[occ].align_mask);
-        signed_type adjustment =
-            (signed_type)(last_offset_fixed - last_offset) - (signed_type)(move_offset_fixed - move_offset);
-        size_type     size   = cur_offset - move_offset_fixed;
+        size_type     size   = cur_offset - move_offset;
         auto          it     = node_list.begin() + occ;
         auto          it_end = node_list.begin() + i;
-        move_iterator mv(it, it_end, move_offset_fixed - last_offset_fixed);
-        manager.move_memory({move_offset_fixed, p}, {last_offset_fixed, p}, size, mv);
+        move_iterator mv(it, it_end, move_offset - last_offset);
+        manager.move_memory({move_offset, p}, {last_offset, p}, size, mv);
 
         for (size_type cpy = occ, l = last; cpy < i; ++cpy)
         {
-          size_type size       = (node_list[cpy + 1].offset - node_list[cpy].offset) + adjustment;
+          size_type size       = (node_list[cpy + 1].offset - node_list[cpy].offset);
           size_type id         = node_list[cpy].id;
           size_type align_mask = node_list[cpy].align_mask;
 
           node_list[l++] = block_type{last_offset, id, align_mask};
           last_offset += size;
-          adjustment = 0;
         }
 
         last                   = i - (occ - last);
@@ -535,7 +526,7 @@ inline void best_fit_arena_allocator<arena_manager, size_type, k_compute_stats>:
 
   std::sort(new_free_list.begin(), new_free_list.end());
   free_list = std::move(new_free_list);
-  free_size = total_remove_size;
+  assert(free_size == total_remove_size);
 }
 
 template <typename arena_manager, typename size_type, bool k_compute_stats>
@@ -734,7 +725,8 @@ template <typename arena_manager, typename size_type, bool k_compute_stats>
 inline void best_fit_arena_allocator<arena_manager, size_type, k_compute_stats>::move_iterator::modify_offset(
     size_type& io_offset)
 {
-  io_offset -= delta_offset;
+  auto const& lb = *(it - 1);
+  io_offset      = (lb.offset + lb.align_mask - delta_offset) & ~lb.align_mask;
 }
 
 } // namespace cppalloc
