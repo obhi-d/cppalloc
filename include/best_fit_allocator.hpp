@@ -1,29 +1,11 @@
 #pragma once
 
 #include <detail/cppalloc_common.hpp>
+#include <detail/vlist.hpp>
 
 namespace cppalloc
 {
 
-namespace detail
-{
-enum : std::uint32_t
-{
-  k_null_32 = std::numeric_limits<std::uint32_t>::max()
-};
-enum ordering_by : std::uint32_t
-{
-  e_size,
-  e_offset,
-  k_count
-};
-struct ordering_type
-{
-  std::uint32_t next = k_null_32;
-  std::uint32_t prev = k_null_32;
-};
-
-} // namespace detail
 struct best_fit_allocator_tag
 {
 };
@@ -72,8 +54,8 @@ public:
   bool validate();
 
 private:
-  using ordering_by   = detail::ordering_by;
-  using ordering_type = detail::ordering_type;
+  using ordering_by = detail::ordering_by;
+  using list_node   = detail::list_node;
 
   enum : std::uint32_t
   {
@@ -90,7 +72,7 @@ private:
     size_type offset = 0;
     size_type size   = 0;
 
-    ordering_type orderings[ordering_by::k_count];
+    list_node orderings[ordering_by::k_count];
 
     inline size_type next_offset() const
     {
@@ -101,10 +83,10 @@ private:
   using ordering_lists_array = std::array<list_type, ordering_by::k_count>;
 
   template <ordering_by i_order>
-  inline ordering_type& order(std::uint32_t i_index);
+  inline list_node& order(std::uint32_t i_index);
 
   template <ordering_by i_order>
-  [[nodiscard]] inline const ordering_type& get(std::uint32_t i_index) const;
+  [[nodiscard]] inline const list_node& get(std::uint32_t i_index) const;
 
   template <ordering_by i_order>
   void insert(std::uint32_t i_where, std::uint32_t i_what);
@@ -286,14 +268,14 @@ private:
 
 template <typename size_type, bool k_growable, bool k_compute_stats>
 template <detail::ordering_by i_order>
-inline detail::ordering_type& best_fit_allocator<size_type, k_growable, k_compute_stats>::order(std::uint32_t i_index)
+inline detail::list_node& best_fit_allocator<size_type, k_growable, k_compute_stats>::order(std::uint32_t i_index)
 {
   return blocks[i_index].orderings[i_order];
 }
 
 template <typename size_type, bool k_growable, bool k_compute_stats>
 template <detail::ordering_by i_order>
-inline const detail::ordering_type& best_fit_allocator<size_type, k_growable, k_compute_stats>::get(
+inline const detail::list_node& best_fit_allocator<size_type, k_growable, k_compute_stats>::get(
     std::uint32_t i_index) const
 {
   return blocks[i_index].orderings[i_order];

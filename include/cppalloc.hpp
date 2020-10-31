@@ -1,6 +1,7 @@
 
 #include "best_fit_allocator.hpp"
 #include "best_fit_arena_allocator.hpp"
+#include "best_fit_arena_allocator_v2.hpp"
 #include "default_allocator.hpp"
 #include "linear_allocator.hpp"
 #include "linear_arena_allocator.hpp"
@@ -8,7 +9,8 @@
 #include "std_allocator_wrapper.hpp"
 #include "std_short_alloc.hpp"
 
-namespace cppalloc {
+namespace cppalloc
+{
 
 template <typename size_type = std::uint32_t>
 constexpr size_type default_alignment = 0;
@@ -23,4 +25,4 @@ constexpr size_type default_alignment = 0;
 //! Allocator::size_type)->void;
 //! }
 //!
-}
+} // namespace cppalloc

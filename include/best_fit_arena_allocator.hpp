@@ -231,9 +231,9 @@ inline typename best_fit_arena_allocator<arena_manager, size_type, k_compute_sta
   auto measure = statistics::report_allocate(i_size);
 
   assert(i_user_handle != k_invalid_handle);
-  if (i_options & f_dedicated_arena)
+  if (i_options & f_dedicated_arena || i_size > arena_size)
   {
-    return {0, add_arena(i_user_handle, i_size)};
+    return {0, add_arena(i_user_handle, i_size + i_alignment)};
   }
 
   size_type align_mask = 0;

@@ -18,7 +18,7 @@ set(CPPALLOC_INCLUDE_BUILD_DIR "${PROJECT_SOURCE_DIR}/include")
 message("Target name: ${CPPALLOC_TARGET_NAME}")
 add_library(${CPPALLOC_TARGET_NAME} INTERFACE)
 add_library(${PROJECT_NAME}::${CPPALLOC_TARGET_NAME} ALIAS ${CPPALLOC_TARGET_NAME})
-target_compile_features(${PROJECT_NAME} INTERFACE cxx_std_17)
+target_compile_features(${PROJECT_NAME} INTERFACE cxx_std_20)
 
 if (CPPHAS_USE_SSE_AVX)
     target_compile_definitions(

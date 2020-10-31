@@ -56,6 +56,16 @@ namespace cppalloc
 constexpr std::uint32_t safety_offset = alignof(void*);
 namespace detail
 {
+constexpr std::uint32_t k_null_32 = std::numeric_limits<std::uint32_t>::max();
+constexpr std::uint64_t k_null_64 = std::numeric_limits<std::uint64_t>::max();
+
+enum ordering_by : std::uint32_t
+{
+  e_size,
+  e_offset,
+  k_count
+};
+
 inline void print_debug_info(std::string const& s)
 {
   std::cout << s;
