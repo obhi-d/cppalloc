@@ -1,4 +1,4 @@
-#include <detail/cppalloc_common.hpp>
+﻿#include <detail/cppalloc_common.hpp>
 
 namespace cppalloc::detail
 {
@@ -22,14 +22,9 @@ private:
     return (node.parent & k_flag_mask) != 0;
   }
 
-  static inline std::uint32_t parent_idx(std::int32_t parent)
-  {
-    return static_cast<std::uint32_t>(parent) & k_parent_mask;
-  }
-
   static inline std::uint32_t set_parent(Container& cont, std::uint32_t node, std::uint32_t parent)
   {
-    tree_node& node_ref = Accessor::node(cont, node);
+    tree_node& node_ref = Accessor::node_ptr(cont, node);
     node_ref.parent     = (node_ref.parent & k_flag_mask) | parent;
   }
 
@@ -48,21 +43,159 @@ private:
     node_ref.parent = (node_ref.parent & k_parent_mask) | k_flag_mask;
   }
 
-  void insert_fixup(Container& cont, std::uint32_t node, tree_node* node_ref)
+  struct node_it
   {
-    std::uint32_t update;
-    tree_node*    parent = &Accessor::node(cont, node_ref->parent);
-    while (is_set(*parent))
+    void set()
     {
-      auto& parent_of_parent = Accecssor::node(parent->parent);
-      if (node_ref->parent == parent_of_parent.right)
+      set_flag(*node);
+    }
+
+    void unset()
+    {
+      unset_flag(*node);
+    }
+
+    bool is_set() const
+    {
+      return is_set(*node);
+    }
+
+    void set_parent(std::uint32_t par)
+    {
+      set_parent(*ref, par);
+    }
+
+    void set_left(std::uint32_t left)
+    {
+      ref->left = left;
+    }
+
+    void set_right(std::uint32_t right)
+    {
+      ref->right = right;
+    }
+
+    node_it parent(Container& icont) const
+    {
+      return node_it(icont, ref->parent & k_parent_mask);
+    }
+
+    node_it left(Container& icont) const
+    {
+      return node_it(icont, ref->left);
+    }
+
+    node_it right(Container& icont) const
+    {
+      return node_it(icont, ref->right);
+    }
+
+    std::uint32_t parent() const
+    {
+      return ref->parent & k_parent_mask;
+    }
+
+    std::uint32_t left() const
+    {
+      return ref->left;
+    }
+
+    std::uint32_t right() const
+    {
+      return ref->right;
+    }
+
+    std::uint32_t value() const
+    {
+      return node;
+    }
+
+    node_it(Container& icont, std::uint32_t inode) : node(inode), ref(Accessor::node_ptr(icont, inode)) {}
+    node_it(std::uint32_t inode, tree_node* iref) : node(inode), ref(iref) {}
+    node_it()               = default;
+    node_it(node_it const&) = default;
+    node_it(node_it&&)      = default;
+    node_it& operator=(node_it const&) = default;
+    node_it& operator=(node_it&&) = default;
+
+    bool operator==(node_it const& iother) const
+    {
+      return node == iother.value();
+    }
+    bool operator!=(node_it const& iother) const
+    {
+      return node != iother.value();
+    }
+
+    std::uint32_t node = detail::k_null_32;
+    tree_node*    ref  = nullptr;
+  };
+
+  void delete_fixup(Container& cont, node_it node)
+  {
+    node_it s;
+    while (node.value() != root && !node.is_set())
+    {
+    }
+  }
+
+  void insert_fixup(Container& cont, node_it node)
+  {
+    for (auto parent = node.parent(cont); parent.is_set(); parent = node.parent(cont))
+    {
+      auto parent_of_parent = parent.parent(cont);
+      if (node.parent() == parent_of_parent.right())
       {
-        update = parent_of_parent.left;
-        if (is_set(Accessor::node(cont, update)))
+        auto update = parent_of_parent.left(cont);
+        if (update.is_set())
         {
+          update.unset();
+          parent.unset();
+          parent_of_parent.set();
+          node = parent_of_parent;
+        }
+        else
+        {
+          if (node.value() == parent.left())
+          {
+            node             = parent;
+            parent           = node.parent(cont);
+            parent_of_parent = parent.parent(cont);
+            right_rotate(cont, node);
+          }
+          parent.unset();
+          parent_of_parent.set();
+          left_rotate(cont, parent_of_parent);
         }
       }
+      else
+      {
+        auto update = parent_of_parent.right(cont);
+        if (update.is_set())
+        {
+          update.unset();
+          parent.unset();
+          parent_of_parent.set();
+          node = parent_of_parent;
+        }
+        else
+        {
+          if (node.value() == parent.right())
+          {
+            node             = parent;
+            parent           = node.parent(cont);
+            parent_of_parent = parent.parent(cont);
+            left_rotate(cont, node);
+          }
+          parent.unset();
+          parent_of_parent.set();
+          right_rotate(cont, parent_of_parent);
+        }
+      }
+      if (node == root)
+        break;
     }
+    unset_flag(Accessor::node_ptr(cont, root));
   }
 
 public:
@@ -76,12 +209,12 @@ public:
     {
       parent = it;
       if (node_value < Accessor::value(cont, it))
-        it = Accessor::node(cont, it).left;
+        it = Accessor::node_ptr(cont, it).left;
       else
-        it = Accessor::node(cont, it).right;
+        it = Accessor::node_ptr(cont, it).right;
     }
 
-    tree_node& node_ref = Accessor::node(cont, node);
+    tree_node& node_ref = *Accessor::node_ptr(cont, node);
     set_parent(node_ref, parent);
     if (parent == k_null_32)
     {
@@ -90,14 +223,14 @@ public:
       return;
     }
     else if (node_value < Accessor::value(cont, parent))
-      Accessor::node(cont, parent).left = node;
+      Accessor::node_ptr(cont, parent).left = node;
     else
-      Accessor::node(cont, parent).right = node;
+      Accessor::node_ptr(cont, parent).right = node;
 
-    if (Accessor::node(cont, parent).parent == k_null_32)
+    if (Accessor::node_ptr(cont, parent).parent == k_null_32)
       return;
 
-    insert_fixup(cont, node, node_ref);
+    insert_fixup(cont, node_it(node, &node_ref));
   }
 
 private:
