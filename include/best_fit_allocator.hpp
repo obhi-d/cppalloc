@@ -441,6 +441,7 @@ inline typename best_fit_allocator<size_type, k_growable, k_compute_stats>::free
     size_type, k_growable, k_compute_stats>::free_lookup(const free_iterator& i_begin, const free_iterator& i_end,
                                                          size_type i_size)
 {
+  // TODO : lower_bound on linked list, no random access
   return std::lower_bound(i_begin, i_end, i_size, [this](const block_type& i_it, size_type i_size) -> bool {
     return i_it.size < i_size;
   });
@@ -451,6 +452,7 @@ inline typename best_fit_allocator<size_type, k_growable, k_compute_stats>::free
     size_type, k_growable, k_compute_stats>::free_lookup(const free_iterator& i_begin, const free_iterator& i_end,
                                                          size_type i_offset, size_type i_size)
 {
+  // TODO : lower_bound on linked list, no random access
   return std::lower_bound(i_begin, i_end, i_size, [this, i_offset](const block_type& i_it, size_type i_size) -> bool {
     return cmp_by_size(i_it, i_offset, i_size);
   });

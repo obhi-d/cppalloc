@@ -12,8 +12,9 @@ struct list_node
 };
 
 template <typename Accessor, typename Container>
-struct vlist
+class vlist
 {
+public:
   std::uint32_t first = k_null_32;
   std::uint32_t last  = k_null_32;
 
@@ -84,22 +85,22 @@ struct vlist
       return ret;
     }
 
-    inline const block_type& operator*() const
+    inline const value_type& operator*() const
     {
       return Accessor::get(owner, index);
     }
 
-    inline const block_type* operator->() const
+    inline const value_type* operator->() const
     {
       return &Accessor::get(owner, index);
     }
 
-    inline block_type& operator*() requires is_not_const<ContainerTy>
+    inline value_type& operator*() requires is_not_const<ContainerTy>
     {
       return Accessor::get(owner, index);
     }
 
-    inline block_type* operator->() requires is_not_const<ContainerTy>
+    inline value_type* operator->() requires is_not_const<ContainerTy>
     {
       return &Accessor::get(owner, index);
     }
