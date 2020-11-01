@@ -1,6 +1,5 @@
-
+﻿
 #include <detail/cppalloc_common.hpp>
-#include <detail/rbtree.hpp>
 #include <detail/table.hpp>
 #include <detail/vlist.hpp>
 #include <type_traits>
@@ -27,7 +26,6 @@ class best_fit_arena_allocator_v2 : public detail::statistics<detail::best_fit_a
     detail::uhandle   data   = detail::k_null_sz<detail::uhandle>;
     std::uint32_t     arena  = detail::k_null_32;
     detail::list_node arena_order;
-    detail::tree_node size_order;
 
     block() {}
     block(size_type i_offset, std::uint32_t i_arena) : offset(i_offset), arena(i_arena) {}
@@ -62,7 +60,7 @@ class best_fit_arena_allocator_v2 : public detail::statistics<detail::best_fit_a
   };
 
   using block_list = detail::vlist<block_accessor, block_bank>;
-  // using free_list  = detail::vlist<block_accessor<detail::ordering_by::e_size>, block_bank>;
+  using free_list  = std::vector<std::uint32_t>;
 
   struct arena
   {
@@ -172,7 +170,7 @@ inline std::pair<std::uint32_t, std::uint32_t> best_fit_arena_allocator_v2<
   if (i_handle == detail::k_null_64)
   {
     arena_ref.free = i_arena_size;
-    free_ordering.push_back(blocks, block_id);
+    free_ordering.push_back(block_id);
     free_size += i_arena_size;
   }
   else
@@ -210,25 +208,11 @@ inline size_type best_fit_arena_allocator_v2<arena_manager, size_type, k_compute
 template <typename arena_manager, typename size_type, bool k_compute_stats>
 std::uint32_t best_fit_arena_allocator_v2<arena_manager, size_type, k_compute_stats>::find_free(size_type i_size)
 {
-  free_ordering.first;
-  ForwardIt                                                 it;
-  typename std::iterator_traits<ForwardIt>::difference_type count, step;
-  count = std::distance(first, last);
-
-  while (count > 0)
-  {
-    it   = first;
-    step = count / 2;
-    std::advance(it, step);
-    if (*it < value)
-    {
-      first = ++it;
-      count -= step + 1;
-    }
-    else
-      count = step;
-  }
-  return first;
+  auto it = std::lower_bound(free_ordering.begin(), free_ordering.end(), i_size,
+                             [this](std::uint32_t block, size_type i_size) -> bool {
+                               return blocks[block].size < i_size;
+                             });
+  return it != free_ordering.end() ? static_cast<std::uint32_t>(std::distance(free_ordering.begin(), it)) : k_null_32;
 }
 
 template <typename arena_manager, typename size_type, bool k_compute_stats>
@@ -268,14 +252,10 @@ inline best_fit_arena_allocator_v2<arena_manager, size_type, k_compute_stats>::a
   {
     return null();
   }
+  std::uint32_t free_node = free_ordering[found];
   // Marker
-  size_type offset       = (*found).offset;
-  size_type fixed_offset = ((offset + align_mask) & ~align_mask);
-  size_type arena_num    = found->arena;
-
-  // We dont need a align_mask if offset and fixed_offset is same
-  if (fixed_offset == offset)
-    i_size -= i_alignment;
+  size_type     offset    = blocks[free_node].offset;
+  std::uint32_t arena_num = blocks[free_node].arena;
 
   found->size -= i_size;
   auto& arena     = arenas[arena_num];
@@ -305,7 +285,8 @@ inline best_fit_arena_allocator_v2<arena_manager, size_type, k_compute_stats>::a
   }
   arena.free_size -= i_size;
   free_size -= i_size;
-  return {fixed_offset, arena_num};
+
+  return {((offset + align_mask) & ~align_mask), arena_num};
 }
 
 } // namespace cppalloc

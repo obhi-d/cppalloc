@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <detail/cppalloc_common.hpp>
 
@@ -265,9 +265,8 @@ inline typename best_fit_arena_allocator<arena_manager, size_type, k_compute_sta
     return null();
   }
 
-  size_type offset       = (*found).offset;
-  size_type fixed_offset = ((offset + align_mask) & ~align_mask);
-  size_type arena_num    = found->arena;
+  size_type offset    = (*found).offset;
+  size_type arena_num = found->arena;
 
   found->size -= i_size;
   auto& arena     = arenas[arena_num];
@@ -297,7 +296,8 @@ inline typename best_fit_arena_allocator<arena_manager, size_type, k_compute_sta
   }
   arena.free_size -= i_size;
   free_size -= i_size;
-  return {fixed_offset, arena_num};
+
+  return {((offset + align_mask) & ~align_mask), arena_num};
 }
 
 template <typename arena_manager, typename size_type, bool k_compute_stats>
