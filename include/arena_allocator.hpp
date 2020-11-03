@@ -24,13 +24,71 @@ enum alloc_option_bits : std::uint32_t
 
 using alloc_options = std::uint32_t;
 
+//  -█████╗-██╗-----██╗------██████╗--██████╗--------██████╗-███████╗███████╗-██████╗
+//  ██╔══██╗██║-----██║-----██╔═══██╗██╔════╝--------██╔══██╗██╔════╝██╔════╝██╔════╝
+//  ███████║██║-----██║-----██║---██║██║-------------██║--██║█████╗--███████╗██║-----
+//  ██╔══██║██║-----██║-----██║---██║██║-------------██║--██║██╔══╝--╚════██║██║-----
+//  ██║--██║███████╗███████╗╚██████╔╝╚██████╗███████╗██████╔╝███████╗███████║╚██████╗
+//  ╚═╝--╚═╝╚══════╝╚══════╝-╚═════╝--╚═════╝╚══════╝╚═════╝-╚══════╝╚══════╝-╚═════╝
+//  ---------------------------------------------------------------------------------
 template <typename size_type>
-struct alloc_desc
+class alloc_desc
 {
-  size_type       size;
-  size_type       alignment = 0;
-  alloc_options   flags     = 0;
-  detail::uhandle huser     = 0;
+public:
+  alloc_desc(size_type isize) : size_(isize) {}
+  alloc_desc(size_type isize, size_type ialignment) : alloc_desc(isize), alignment_(ialignment - 1) {}
+  alloc_desc(size_type isize, size_type ialignment, detail::uhandle ihuser)
+      : alloc_desc(isize, ialignment), huser_(ihuser)
+  {
+  }
+  alloc_desc(size_type isize, size_type ialignment, detail::uhandle ihuser, alloc_options iflags)
+      : alloc_desc(isize, ialignment, ihuser), flags_(iflags)
+  {
+  }
+
+  size_type size() const
+  {
+    return size;
+  }
+
+  size_type alignment_mask() const
+  {
+    return alignment_mask_;
+  }
+
+  detail::uhandle huser() const
+  {
+    return huser_;
+  }
+
+  alloc_options flags() const
+  {
+    return flags_;
+  }
+
+  size_type adjusted_size() const
+  {
+    return size() + alignment_mask();
+  }
+
+private:
+  size_type       size_           = 0;
+  size_type       alignment_mask_ = 0;
+  detail::uhandle huser_          = 0;
+  alloc_options   flags_          = 0;
+};
+
+template <typename size_type>
+struct alloc_info
+{
+  detail::uhandle harena = detail::k_null_sz<detail::uhandle>;
+  size_type       offset = detail::k_null_sz<size_type>;
+  address         halloc = detail::k_null_32;
+  alloc_info()           = default;
+  alloc_info(detail::uhandle ihandle, size_type ioffset, address ihalloc)
+      : harena(ihandle), offset(ioffset), ihalloc(halloc)
+  {
+  }
 };
 
 //! Inteface
@@ -203,10 +261,10 @@ public:
   using block      = detail::block<traits>;
   using alloc_desc = cppalloc::alloc_desc<size_type>;
 
-  inline free_list::iterator try_allocate(arena_bank& arenas, block_bank& blocks, alloc_desc const& desc);
-  inline free_list::iterator try_allocate(arena_bank& arenas, block_bank& blocks, alloc_desc const& desc,
-                                          free_list::iterator prev);
-  inline std::uint32_t commit(arena_bank& arenas, block_bank& blocks, alloc_desc const& desc, free_list::iterator);
+  inline free_list::iterator try_allocate(arena_bank& arenas, block_bank& blocks, size_type size);
+  inline free_list::iterator try_allocate(arena_bank& arenas, block_bank& blocks, size_type size,
+                                          free_list::iterator from);
+  inline std::uint32_t       commit(arena_bank& arenas, block_bank& blocks, size_type size, free_list::iterator);
 
   inline void add_free_arena(std::uint32_t block);
   inline void add_free(block_bank& blocks, std::uint32_t block);
@@ -238,35 +296,29 @@ private:
 /// alloc_strategy::best_fit Impl
 
 template <typename traits>
-inline free_list::iterator alloc_strategy_impl<alloc_strategy::best_fit, traits>::try_allocate(arena_bank&       arenas,
-                                                                                               block_bank&       blocks,
-                                                                                               alloc_desc const& desc)
+inline free_list::iterator alloc_strategy_impl<alloc_strategy::best_fit, traits>::try_allocate(arena_bank& arenas,
+                                                                                               block_bank& blocks,
+                                                                                               size_type   size)
 {
-  auto size = desc.alignment ? desc.size + desc.alignment - 1 : desc.size;
   if (free_ordering.size() == 0 || blocks[free_ordering.back()] < size)
     return free_ordering.end();
   return find_free(blocks, free_ordering.begin(), free_ordering.end(), size);
 }
 
 template <typename traits>
-inline free_list::iterator alloc_strategy_impl<alloc_strategy::best_fit, traits>::try_allocate(arena_bank&       arenas,
-                                                                                               block_bank&       blocks,
-                                                                                               alloc_desc const& desc,
+inline free_list::iterator alloc_strategy_impl<alloc_strategy::best_fit, traits>::try_allocate(arena_bank& arenas,
+                                                                                               block_bank& blocks,
+                                                                                               size_type   size,
                                                                                                free_list::iterator prev)
 {
-  auto size = desc.alignment ? desc.size + desc.alignment - 1 : desc.size;
-  if (prev != free_ordering.end())
-    return find_free(blocks, std::next(prev), free_ordering.end(), size);
-  return free_ordering.end();
+  return find_free(blocks, prev, free_ordering.end(), size);
 }
 
 template <typename traits>
-inline std::uint32_t alloc_strategy_impl<alloc_strategy::best_fit, traits>::commit(arena_bank&         arenas,
-                                                                                   block_bank&         blocks,
-                                                                                   alloc_desc const&   desc,
+inline std::uint32_t alloc_strategy_impl<alloc_strategy::best_fit, traits>::commit(arena_bank& arenas,
+                                                                                   block_bank& blocks, size_type size,
                                                                                    free_list::iterator found)
 {
-  auto size = desc.alignment ? desc.size + desc.alignment - 1 : desc.size;
   if (found == free_ordering.end())
   {
     return null();
@@ -451,15 +503,9 @@ class arena_allocator : public detail::statistics<detail::arena_allocator_tag, t
   using arena_manager  = typename traits::manager;
 
 public:
+  using alloc_info   = cppalloc::alloc_info<size_type>;
   using option_flags = std::uint32_t;
   using address      = std::uint32_t;
-
-  struct alloc_info
-  {
-    detail::uhandle harena = detail::k_null_sz<detail::uhandle>;
-    size_type       offset = detail::k_null_sz<size_type>;
-    address         halloc = detail::k_null_32;
-  };
 
   template <typename... Args>
   arena_allocator(size_type i_arena_size, arena_manager& i_manager, Args&&...);
@@ -477,6 +523,7 @@ public:
 private:
   std::pair<std::uint32_t, std::uint32_t> add_arena(detail::uhandle i_handle, size_type i_arena_size);
   void                                    defragment();
+  size_type                               finalize_commit(block& blk, detail::uhandle huser, size_type alignment);
 
   block_bank                     blocks;
   arena_bank                     arenas;
@@ -573,8 +620,12 @@ inline void arena_allocator<traits>::defragment()
         auto id = new_strat.try_allocate(arenas, blocks, blk.size);
         if (new_strat.is_valid(id))
         {
-          auto new_blk = new_start.commit(arenas, blocks, id);
-          rebinds.emplace_back(curr_blk, new_blk);
+          auto  new_blk_id = new_start.commit(arenas, blocks, blk.size, id);
+          auto& new_blk    = blocks[new_blk_id];
+
+          finalize_commit(new_blk, blk.huser, 1);
+
+          rebinds.emplace_back(curr_blk, new_blk_id);
         }
       }
     }
@@ -584,51 +635,47 @@ inline void arena_allocator<traits>::defragment()
 }
 
 template <typename traits>
+inline size_type arena_allocator<traits>::finalize_commit(block& blk, detail::uhandle huser, size_type alignment)
+{
+  blk.data      = huser;
+  blk.alignment = static_cast<std::uint8_t>(std::popcount(alignment));
+  arenas[blk.arena].free -= blk.size;
+  free_size -= blk.size;
+  return ((blk.offset + alignment) & ~alignment);
+}
+
+template <typename traits>
 inline typename arena_allocator<traits>::alloc_info arena_allocator<traits>::allocate(alloc_desc const& desc)
 {
-
-  auto measure = statistics::report_allocate(desc.size);
+  auto measure = statistics::report_allocate(desc.size());
+  auto size    = desc.adjusted_size();
 
   assert(desc.huser != detail::k_null_64);
-  if (desc.flags & f_dedicated_arena || desc.size >= arena_size)
+  if (desc.flags & f_dedicated_arena || desc.size() >= arena_size)
   {
-    return add_arena(desc.huser, desc.size).second;
+    return add_arena(desc.huser(), desc.size()).second;
   }
 
-  std::uint32_t id = strat.commit(arenas, blocks, desc, strat.try_allocate(arenas, blocks, desc));
+  std::uint32_t id = strat.commit(arenas, blocks, size, strat.try_allocate(arenas, blocks, size));
   if (id == null())
   {
     if (i_options & f_defrag)
     {
       defragment();
-      id = strat.commit(arenas, blocks, desc, strat.try_allocate(arenas, blocks, desc));
+      id = strat.commit(arenas, blocks, size, strat.try_allocate(arenas, blocks, size));
     }
 
     if (id == null())
     {
       add_arena(detail::k_null_sz<detail::uhandle>, arena_size);
-      id = strat.commit(arenas, blocks, desc, strat.try_allocate(arenas, blocks, desc));
+      id = strat.commit(arenas, blocks, size, strat.try_allocate(arenas, blocks, size));
     }
   }
 
   if (id == null())
     return alloc_info();
-
-  auto& blk        = blocks[id];
-  blk.data         = desc.huser;
-  blk.alignment    = 0;
-  size_type offset = blk.offset;
-  if (desc.alignment)
-  {
-    auto alignment = desc.alignment - 1;
-    blk.alignment  = static_cast<std::uint8_t>(std::popcount(alignment));
-    offset         = ((blk.offset + alignment) & ~alignment);
-  }
-
-  arenas[blk.arena].free -= size;
-  free_size -= size;
-
-  return alloc_info{.harena = arenas[blk.arena].data, .offset = offset, .halloc = id};
+  auto& blk = blocks[id];
+  return alloc_info(arenas[blk.arena].data, finalize_commit(blk, desc.huser(), desc.alignment_mask()), id);
 }
 
 template <typename traits>
