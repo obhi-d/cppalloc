@@ -1,3 +1,4 @@
+#pragma once
 #include <detail/cppalloc_common.hpp>
 
 namespace cppalloc::detail
@@ -27,60 +28,60 @@ public:
     using pointer           = value_type*;
     using reference         = value_type&;
 
-    iterator(const iterator& i_other) : owner(i_other.owner), index(i_other.index) {}
-    iterator(iterator&& i_other) noexcept : owner(i_other.owner), index(i_other.index)
+    iterator_t(const iterator_t& i_other) : owner(i_other.owner), index(i_other.index) {}
+    iterator_t(iterator_t&& i_other) noexcept : owner(i_other.owner), index(i_other.index)
     {
       i_other.index = k_null_32;
     }
 
-    explicit iterator(ContainerTy& i_owner) : owner(i_owner), index(k_null_32) {}
-    iterator(ContainerTy& i_owner, std::uint32_t start) : owner(i_owner), index(start) {}
+    explicit iterator_t(ContainerTy& i_owner) : owner(i_owner), index(k_null_32) {}
+    iterator_t(ContainerTy& i_owner, std::uint32_t start) : owner(i_owner), index(start) {}
 
-    inline iterator& operator=(iterator&& i_other) noexcept
+    inline iterator_t& operator=(iterator_t&& i_other) noexcept
     {
       index         = i_other.index;
       i_other.index = k_null_32;
       return *this;
     }
 
-    inline iterator& operator=(const iterator& i_other)
+    inline iterator_t& operator=(const iterator_t& i_other)
     {
       index = i_other.index;
       return *this;
     }
 
-    inline bool operator==(const iterator& i_other) const
+    inline bool operator==(const iterator_t& i_other) const
     {
       return (index == i_other.index) != 0;
     }
 
-    inline bool operator!=(const iterator& i_other) const
+    inline bool operator!=(const iterator_t& i_other) const
     {
       return (index != i_other.index) != 0;
     }
 
-    inline iterator& operator++()
+    inline iterator_t& operator++()
     {
       index = Accessor::node(owner, index).next;
       return *this;
     }
 
-    inline iterator operator++(int)
+    inline iterator_t operator++(int)
     {
-      iterator ret(*this);
+      iterator_t ret(*this);
       index = Accessor::node(owner, index).next;
       return ret;
     }
 
-    inline iterator& operator--()
+    inline iterator_t& operator--()
     {
       index = Accessor::node(owner, index).prev;
       return *this;
     }
 
-    inline iterator operator--(int)
+    inline iterator_t operator--(int)
     {
-      iterator ret(*this);
+      iterator_t ret(*this);
       index = Accessor::node(owner, index).prev;
       return ret;
     }
@@ -207,25 +208,71 @@ public:
     }
   }
 
-  inline void erase(Container& cont, std::uint32_t node)
+  inline void unlink(Container& cont, std::uint32_t node)
   {
     auto& l_node = Accessor::node(cont, node);
 
-    std::uint32_t prev = order<i_order>(i_where).prev;
-    std::uint32_t next = order<i_order>(i_where).next;
-
-    if (l_node.prev != k_null)
+    if (l_node.prev != k_null_32)
       Accessor::node(cont, l_node.prev).next = l_node.next;
     else
       first = l_node.next;
 
-    if (l_node.next != k_null)
+    if (l_node.next != k_null_32)
       Accessor::node(cont, l_node.next).prev = l_node.prev;
     else
       last = l_node.prev;
 
     l_node.prev = k_null_32;
     l_node.next = k_null_32;
+  }
+
+  // special method to unlink two consequetive nodes
+  // assumes current node's next is valid
+  inline void unlink2(Container& cont, std::uint32_t node)
+  {
+    auto& l_node = Accessor::node(cont, node);
+    auto& l_next = Accessor::node(cont, l_node.next);
+
+    if (l_node.prev != k_null_32)
+      Accessor::node(cont, l_node.prev).next = l_next.next;
+    else
+      first = l_next.next;
+
+    if (l_next.next != k_null_32)
+      Accessor::node(cont, next).prev = l_node.prev;
+    else
+      last = l_node.prev;
+
+    l_next.next = k_null_32;
+    l_next.prev = k_null_32;
+    l_node.prev = k_null_32;
+    l_node.next = k_null_32;
+  }
+
+  inline void erase(Container& cont, std::uint32_t node)
+  {
+    unlink(cont, node);
+    cont.erase(node);
+  }
+
+  inline void erase2(Container& cont, std::uint32_t node)
+  {
+    auto next = Accessor::node(cont, node).next;
+    unlink2(cont, node);
+    cont.erase(node);
+    cont.erase(next);
+  }
+
+  inline void clear(Container& cont)
+  {
+    std::uint32_t node = first;
+    while (node != k_null_32)
+    {
+      auto l_next = Accessor::node(cont, node).next;
+      cont.erase(node);
+      node = l_next;
+    }
+    first = last = k_null_32;
   }
 };
 
