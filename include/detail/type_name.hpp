@@ -1,3 +1,5 @@
+#pragma once
+
 #if defined(__clang__)
 #define CPPALLOC_FUNC_NAME  __PRETTY_FUNCTION__
 #define CPPALLOC_FUNC_START sizeof("detail::const_string_typeh cppalloc::detail::type_name() [T = ") - 1

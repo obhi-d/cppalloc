@@ -1,3 +1,4 @@
+#pragma once
 #include <detail/cppalloc_common.hpp>
 #include <type_traits>
 
@@ -5,7 +6,7 @@ namespace cppalloc::detail
 {
 
 template <typename T>
-struct table
+class table
 {
   template <typename... Args>
   std::uint32_t emplace(Args&&... args)

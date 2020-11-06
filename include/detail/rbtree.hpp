@@ -1,17 +1,17 @@
-﻿#include <detail/cppalloc_common.hpp>
+﻿#pragma once
+
+#include <detail/cppalloc_common.hpp>
 
 namespace cppalloc::detail
 {
 //
 struct tree_node
 {
-  std::uint32_t parent = k_null_32; // sign indicates color
+  std::uint32_t parent = k_null_32;
   std::uint32_t left   = k_null_32;
   std::uint32_t right  = k_null_32;
 };
 
-constexpr std::uint32_t k_flag_mask   = 1u << 31u;
-constexpr std::uint32_t k_parent_mask = ~k_flag_mask;
 template <typename Accessor, typename Container>
 class rbtree
 {
@@ -19,28 +19,28 @@ class rbtree
 private:
   static inline bool is_set(tree_node const& node)
   {
-    return (node.parent & k_flag_mask) != 0;
+    return Accessor::is_set(node);
   }
 
   static inline std::uint32_t set_parent(Container& cont, std::uint32_t node, std::uint32_t parent)
   {
-    tree_node& node_ref = Accessor::node_ptr(cont, node);
-    node_ref.parent     = (node_ref.parent & k_flag_mask) | parent;
+    tree_node& node_ref = *Accessor::node_ptr(cont, node);
+    node_ref.parent     = parent;
   }
 
   static inline std::uint32_t set_parent(tree_node& node_ref, std::uint32_t parent)
   {
-    node_ref.parent = (node_ref.parent & k_flag_mask) | parent;
+    node_ref.parent = parent;
   }
 
   static inline std::uint32_t unset_flag(tree_node& node_ref)
   {
-    node_ref.parent = (node_ref.parent & k_parent_mask);
+    Accessor::unset_flag(node_ref);
   }
 
   static inline std::uint32_t set_flag(tree_node& node_ref)
   {
-    node_ref.parent = (node_ref.parent & k_parent_mask) | k_flag_mask;
+    Accessor::set_flag(node_ref);
   }
 
   struct node_it
@@ -77,7 +77,7 @@ private:
 
     node_it parent(Container& icont) const
     {
-      return node_it(icont, ref->parent & k_parent_mask);
+      return node_it(icont, ref->parent);
     }
 
     node_it left(Container& icont) const
@@ -92,7 +92,7 @@ private:
 
     std::uint32_t parent() const
     {
-      return ref->parent & k_parent_mask;
+      return ref->parent;
     }
 
     std::uint32_t left() const
@@ -195,7 +195,7 @@ private:
       if (node == root)
         break;
     }
-    unset_flag(Accessor::node_ptr(cont, root));
+    unset_flag(*Accessor::node_ptr(cont, root));
   }
 
 public:
@@ -209,9 +209,9 @@ public:
     {
       parent = it;
       if (node_value < Accessor::value(cont, it))
-        it = Accessor::node_ptr(cont, it).left;
+        it = Accessor::node_ptr(cont, it)->left;
       else
-        it = Accessor::node_ptr(cont, it).right;
+        it = Accessor::node_ptr(cont, it)->right;
     }
 
     tree_node& node_ref = *Accessor::node_ptr(cont, node);
@@ -223,11 +223,11 @@ public:
       return;
     }
     else if (node_value < Accessor::value(cont, parent))
-      Accessor::node_ptr(cont, parent).left = node;
+      Accessor::node_ptr(cont, parent)->left = node;
     else
-      Accessor::node_ptr(cont, parent).right = node;
+      Accessor::node_ptr(cont, parent)->right = node;
 
-    if (Accessor::node_ptr(cont, parent).parent == k_null_32)
+    if (Accessor::node_ptr(cont, parent)->parent == k_null_32)
       return;
 
     insert_fixup(cont, node_it(node, &node_ref));

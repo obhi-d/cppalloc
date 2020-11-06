@@ -54,15 +54,20 @@
 namespace cppalloc
 {
 constexpr std::uint32_t safety_offset = alignof(void*);
+
+using uhandle = std::uint32_t;
+using ihandle = std::uint32_t;
+
 namespace detail
 {
+
+template <typename size_type>
+constexpr size_type     k_null_sz  = std::numeric_limits<size_type>::max();
 constexpr std::uint32_t k_null_32  = std::numeric_limits<std::uint32_t>::max();
 constexpr std::int32_t  k_null_i32 = std::numeric_limits<std::int32_t>::min();
 constexpr std::uint64_t k_null_64  = std::numeric_limits<std::uint64_t>::max();
-template <typename size_type>
-constexpr size_type k_null_sz = std::numeric_limits<size_type>::max();
+constexpr uhandle       k_null_uh  = std::numeric_limits<uhandle>::max();
 
-using uhandle = std::uint32_t;
 enum ordering_by : std::uint32_t
 {
   e_size,
