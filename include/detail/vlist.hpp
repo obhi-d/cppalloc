@@ -12,10 +12,12 @@ struct list_node
   std::uint32_t prev = k_null_32;
 };
 
-template <typename Accessor, typename Container>
+template <typename Accessor>
 class vlist
 {
 public:
+  using container = typename Accessor::container;
+
   std::uint32_t first = k_null_32;
   std::uint32_t last  = k_null_32;
 
@@ -127,8 +129,8 @@ public:
     std::uint32_t index = k_null_32;
   };
 
-  using iterator       = iterator_t<Container>;
-  using const_iterator = iterator_t<Container const>;
+  using iterator       = iterator_t<container>;
+  using const_iterator = iterator_t<container const>;
 
   inline std::uint32_t begin() const
   {
@@ -140,22 +142,22 @@ public:
     return k_null_32;
   }
 
-  inline const_iterator begin(Container const& cont) const
+  inline const_iterator begin(container const& cont) const
   {
     return const_iterator(*this, first);
   }
 
-  inline const_iterator end(Container const& cont) const
+  inline const_iterator end(container const& cont) const
   {
     return const_iterator(*this);
   }
 
-  inline iterator begin(Container& cont)
+  inline iterator begin(container& cont)
   {
     return iterator(*this, first);
   }
 
-  inline iterator end(Container& cont)
+  inline iterator end(container& cont)
   {
     return iterator(*this);
   }
@@ -170,7 +172,7 @@ public:
     return last;
   }
 
-  inline void push_back(Container& cont, std::uint32_t node)
+  inline void push_back(container& cont, std::uint32_t node)
   {
     if (last != k_null_32)
       Accessor::node(cont, last).next = node;
@@ -180,7 +182,7 @@ public:
     last                            = node;
   }
 
-  inline void insert(Container& cont, std::uint32_t loc, std::uint32_t node)
+  inline void insert(container& cont, std::uint32_t loc, std::uint32_t node)
   {
     // end?
     if (loc == k_null_32)
@@ -208,7 +210,7 @@ public:
     }
   }
 
-  inline void unlink(Container& cont, std::uint32_t node)
+  inline void unlink(container& cont, std::uint32_t node)
   {
     auto& l_node = Accessor::node(cont, node);
 
@@ -228,7 +230,7 @@ public:
 
   // special method to unlink two consequetive nodes
   // assumes current node's next is valid
-  inline void unlink2(Container& cont, std::uint32_t node)
+  inline void unlink2(container& cont, std::uint32_t node)
   {
     auto& l_node = Accessor::node(cont, node);
     auto& l_next = Accessor::node(cont, l_node.next);
@@ -249,13 +251,13 @@ public:
     l_node.next = k_null_32;
   }
 
-  inline void erase(Container& cont, std::uint32_t node)
+  inline void erase(container& cont, std::uint32_t node)
   {
     unlink(cont, node);
     cont.erase(node);
   }
 
-  inline void erase2(Container& cont, std::uint32_t node)
+  inline void erase2(container& cont, std::uint32_t node)
   {
     auto next = Accessor::node(cont, node).next;
     unlink2(cont, node);
@@ -263,7 +265,7 @@ public:
     cont.erase(next);
   }
 
-  inline void clear(Container& cont)
+  inline void clear(container& cont)
   {
     std::uint32_t node = first;
     while (node != k_null_32)

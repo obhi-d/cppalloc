@@ -209,6 +209,7 @@ struct block_accessor
   using value_type = block<traits>;
   using bank_type  = block_bank<traits>;
   using size_type  = typename traits::size_type;
+  using container  = bank_type;
 
   inline static detail::list_node& node(bank_type& bank, std::uint32_t node)
   {
@@ -232,7 +233,7 @@ struct block_accessor
 };
 
 template <typename traits>
-using block_list = detail::vlist<block_accessor<traits>, block_bank<traits>>;
+using block_list = detail::vlist<block_accessor<traits>>;
 
 //  -█████╗-██████╗-███████╗███╗---██╗-█████╗-
 //  ██╔══██╗██╔══██╗██╔════╝████╗--██║██╔══██╗
@@ -262,6 +263,7 @@ struct arena_accessor
   using value_type = block<traits>;
   using bank_type  = arena_bank<traits>;
   using size_type  = typename traits::size_type;
+  using container  = bank_type;
 
   inline static detail::list_node& node(bank_type& bank, std::uint32_t node)
   {
@@ -285,7 +287,7 @@ struct arena_accessor
 };
 
 template <typename traits>
-using arena_list = detail::vlist<arena_accessor<traits>, arena_bank<traits>>;
+using arena_list = detail::vlist<arena_accessor<traits>>;
 
 using free_list = std::vector<std::uint32_t>;
 
@@ -634,7 +636,7 @@ private:
 
   void        defragment();
   size_type   finalize_commit(block& blk, uhandle huser, size_type alignment);
-  static void copy(block& dst, block const& src);
+  static void copy(block const& src, block& dst);
   static void push_memmove(std::vector<memory_move>& dst, memory_move value);
 
   bank_data      bank;
@@ -876,7 +878,7 @@ inline void arena_allocator<traits>::defragment()
         auto  new_blk_id = refresh.strat.commit(refresh.arenas, refresh.blocks, blk.size, id);
         auto& new_blk    = refresh.blocks[new_blk_id];
 
-        copy(new_blk, blk);
+        copy(blk, new_blk);
         rebinds.emplace_back(new_blk_id);
         push_memmove(moves, memory_move(blk.offset, new_blk.offset, blk.size, curr_blk.arena, new_blk.arena));
       }

@@ -12,33 +12,53 @@ struct tree_node
   std::uint32_t right  = k_null_32;
 };
 
-template <typename Accessor, typename Container>
+struct accessor_adapter
+{
+  using value_type = int;
+  struct node_type
+  {
+    value_type value;
+    tree_node  node;
+  };
+
+  using container = std::vector<value_type>;
+
+  node_type const& node(container const&, std::uint32_t);
+  node_type&       node(container&, std::uint32_t);
+  tree_node const& links(value_type const&);
+  tree_node&       links(value_type&);
+  int              value(value_type const&);
+  bool             is_set(node_type const&);
+  bool             set_flag(node_type&);
+  bool             unset_flag(node_type&);
+};
+
+template <typename Accessor>
 class rbtree
 {
 
 private:
-  static inline bool is_set(tree_node const& node)
+  using value_type = typename Accessor::value_type;
+  using node_type  = typename Accessor::node_type;
+  using container  = typename Accessor::container;
+
+  static inline bool is_set(node_type const& node)
   {
     return Accessor::is_set(node);
   }
 
-  static inline std::uint32_t set_parent(Container& cont, std::uint32_t node, std::uint32_t parent)
+  static inline std::uint32_t set_parent(container& cont, std::uint32_t node, std::uint32_t parent)
   {
-    tree_node& node_ref = *Accessor::node_ptr(cont, node);
-    node_ref.parent     = parent;
+    tree_node& lnk_ref = Accessor::links(Accessor::node(cont, node));
+    lnk_ref.parent     = parent;
   }
 
-  static inline std::uint32_t set_parent(tree_node& node_ref, std::uint32_t parent)
-  {
-    node_ref.parent = parent;
-  }
-
-  static inline std::uint32_t unset_flag(tree_node& node_ref)
+  static inline std::uint32_t unset_flag(node_type& node_ref)
   {
     Accessor::unset_flag(node_ref);
   }
 
-  static inline std::uint32_t set_flag(tree_node& node_ref)
+  static inline std::uint32_t set_flag(node_type& node_ref)
   {
     Accessor::set_flag(node_ref);
   }
@@ -47,71 +67,71 @@ private:
   {
     void set()
     {
-      set_flag(*node);
+      set_flag(*ref);
     }
 
     void unset()
     {
-      unset_flag(*node);
+      unset_flag(*ref);
     }
 
     bool is_set() const
     {
-      return is_set(*node);
+      return is_set(*ref);
     }
 
     void set_parent(std::uint32_t par)
     {
-      set_parent(*ref, par);
+      Accessor::link(*ref).parent = par;
     }
 
     void set_left(std::uint32_t left)
     {
-      ref->left = left;
+      Accessor::link(*ref).left = left;
     }
 
     void set_right(std::uint32_t right)
     {
-      ref->right = right;
+      Accessor::link(*ref).right = right;
     }
 
-    node_it parent(Container& icont) const
+    node_it parent(container& icont) const
     {
-      return node_it(icont, ref->parent);
+      return node_it(icont, Accessor::link(*ref).parent);
     }
 
-    node_it left(Container& icont) const
+    node_it left(container& icont) const
     {
-      return node_it(icont, ref->left);
+      return node_it(icont, Accessor::link(*ref).left);
     }
 
-    node_it right(Container& icont) const
+    node_it right(container& icont) const
     {
-      return node_it(icont, ref->right);
+      return node_it(icont, Accessor::link(*ref).right);
     }
 
     std::uint32_t parent() const
     {
-      return ref->parent;
+      return Accessor::link(*ref).parent;
     }
 
     std::uint32_t left() const
     {
-      return ref->left;
+      return Accessor::link(*ref).left;
     }
 
     std::uint32_t right() const
     {
-      return ref->right;
+      return Accessor::link(*ref).right;
     }
 
-    std::uint32_t value() const
+    std::uint32_t index() const
     {
       return node;
     }
 
-    node_it(Container& icont, std::uint32_t inode) : node(inode), ref(Accessor::node_ptr(icont, inode)) {}
-    node_it(std::uint32_t inode, tree_node* iref) : node(inode), ref(iref) {}
+    node_it(container& icont, std::uint32_t inode) : node(inode), ref(&Accessor::node(icont, inode)) {}
+    node_it(std::uint32_t inode, node_type* iref) : node(inode), ref(iref) {}
     node_it()               = default;
     node_it(node_it const&) = default;
     node_it(node_it&&)      = default;
@@ -120,26 +140,26 @@ private:
 
     bool operator==(node_it const& iother) const
     {
-      return node == iother.value();
+      return node == iother.index();
     }
     bool operator!=(node_it const& iother) const
     {
-      return node != iother.value();
+      return node != iother.index();
     }
 
     std::uint32_t node = detail::k_null_32;
-    tree_node*    ref  = nullptr;
+    node_type*    ref  = nullptr;
   };
 
-  void delete_fixup(Container& cont, node_it node)
+  void delete_fixup(container& cont, node_it node)
   {
     node_it s;
-    while (node.value() != root && !node.is_set())
+    while (node.index() != root && !node.is_set())
     {
     }
   }
 
-  void insert_fixup(Container& cont, node_it node)
+  void insert_fixup(container& cont, node_it node)
   {
     for (auto parent = node.parent(cont); parent.is_set(); parent = node.parent(cont))
     {
@@ -199,7 +219,22 @@ private:
   }
 
 public:
-  void insert(Container& cont, std::uint32_t node)
+  std::uint32_t find(container& icont, std::uint32_t iroot, value_type ivalue) const
+  {
+    std::uint32_t node = iroot;
+    while (node != k_null_32)
+    {
+      auto node_ptr = Accessor::node_ptr(icont, node);
+      if (node_ptr
+    }
+  }
+
+  std::uint32_t find(container& icont, value_type ivalue) const
+  {
+    return find(icont, root, ivalue);
+  }
+
+  void insert(container& cont, std::uint32_t node)
   {
     std::uint32_t parent     = k_null_32;
     std::uint32_t it         = root;
