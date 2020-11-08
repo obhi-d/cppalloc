@@ -27,22 +27,25 @@ using alloc_options = std::uint32_t;
 template <typename size_type>
 struct memory_manager_adapter
 {
-  static bool drop_arena([[maybe_unused]] uhandle id)
+  bool drop_arena([[maybe_unused]] uhandle id)
   {
     return true;
   }
 
-  static uhandle add_arena([[maybe_unused]] ihandle id, [[maybe_unused]] size_type size)
+  uhandle add_arena([[maybe_unused]] ihandle id, [[maybe_unused]] size_type size)
   {
     return id;
   }
 
-  static void begin_defragment() {}
-  static void end_defragment() {}
+  void begin_defragment() {}
+  void end_defragment() {}
 
-  template <typename iter_type>
-  static void move_memory([[maybe_unused]] uhandle src_arena, [[maybe_unused]] uhandle dst_arena,
-                          [[maybe_unused]] size_type from, [[maybe_unused]] size_type to, size_type size)
+  void move_memory([[maybe_unused]] uhandle src_arena, [[maybe_unused]] uhandle dst_arena,
+                   [[maybe_unused]] size_type from, [[maybe_unused]] size_type to, size_type size)
+  {
+  }
+  template <typename alloc_info>
+  void rebind_alloc([[maybe_unused]] uhandle halloc, alloc_info info)
   {
   }
 };
@@ -112,7 +115,7 @@ struct alloc_info
   size_type offset = detail::k_null_sz<size_type>;
   ihandle   halloc = detail::k_null_32;
   alloc_info()     = default;
-  alloc_info(uhandle ihandle, size_type ioffset, address ihalloc) : harena(ihandle), offset(ioffset), ihalloc(halloc) {}
+  alloc_info(uhandle iharena, size_type ioffset, ihandle ihalloc) : harena(iharena), offset(ioffset), ihalloc(halloc) {}
 };
 
 } // namespace cppalloc

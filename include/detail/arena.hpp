@@ -63,12 +63,13 @@ using free_list = std::vector<std::uint32_t>;
 template <alloc_strategy strategy, typename traits>
 class alloc_strategy_impl;
 
-struct empty
-{
-};
-
 template <alloc_strategy strategy>
-using block_ext = cppalloc::detail::empty;
+struct block_ext
+{
+  struct type
+  {
+  };
+};
 
 template <typename traits>
 using alloc_strategy_type = alloc_strategy_impl<traits::strategy, traits>;
@@ -83,10 +84,10 @@ using alloc_strategy_type = alloc_strategy_impl<traits::strategy, traits>;
 template <typename traits>
 struct bank_data
 {
-  block_bank<traits>                                        blocks;
-  arena_bank<traits>                                        arenas;
-  arena_list<traits>                                        arena_order;
-  [[no_unique_address]] detail::alloc_strategy_type<traits> strat;
-  typename traits::size_type                                free_size = 0;
+  block_bank<traits>                  blocks;
+  arena_bank<traits>                  arenas;
+  arena_list<traits>                  arena_order;
+  detail::alloc_strategy_type<traits> strat;
+  typename traits::size_type          free_size = 0;
 };
 } // namespace cppalloc::detail

@@ -5,7 +5,11 @@
 namespace cppalloc::detail
 {
 template <>
-using block_ext<alloc_strategy::best_fit_tree> = cppalloc::detail::tree_node;
+struct block_ext<alloc_strategy::best_fit_tree>
+{
+  using type = cppalloc::detail::tree_node;
+};
+
 // ██████╗-███████╗███████╗████████╗-----███████╗██╗████████╗--████████╗██████╗-███████╗███████╗
 // ██╔══██╗██╔════╝██╔════╝╚══██╔══╝-----██╔════╝██║╚══██╔══╝--╚══██╔══╝██╔══██╗██╔════╝██╔════╝
 // ██████╔╝█████╗--███████╗---██║--------█████╗--██║---██║--------██║---██████╔╝█████╗--█████╗--

@@ -17,7 +17,7 @@ struct arena_allocator_traits
   static inline constexpr alloc_strategy strategy        = strategy_v;
   using manager                                          = manager_t;
   using size_type                                        = usize_t;
-  using extension                                        = block_ext<strategy_v>;
+  using extension                                        = typename block_ext<strategy_v>::type;
 };
 
 template <typename traits>
@@ -32,7 +32,7 @@ class arena_allocator_impl : public detail::statistics<detail::arena_allocator_t
   using arena_list     = detail::arena_list<traits>;
   using statistics     = detail::statistics<detail::arena_allocator_tag, traits::k_compute_stats>;
   using strategy       = detail::alloc_strategy_type<traits>;
-  using memory_move    = detail::memory_move<triats>;
+  using memory_move    = detail::memory_move<traits>;
   using alloc_desc     = cppalloc::alloc_desc<size_type>;
   using arena_manager  = typename traits::manager;
   using bank_data      = detail::bank_data<traits>;
@@ -43,11 +43,7 @@ public:
   using address      = std::uint32_t;
 
   template <typename... Args>
-  inline arena_allocator_impl(size_type i_arena_size, arena_manager& i_manager, Args&&... args)
-      : statistics(std::forward<Args>(args)...), arena_size(i_arena_size), manager(i_manager)
-  {
-  }
-
+  inline arena_allocator_impl(size_type i_arena_size, arena_manager& i_manager, Args&&... args);
   //! Allocate
   alloc_info allocate(alloc_desc const& desc);
   //! Deallocate, size is optional
@@ -357,7 +353,7 @@ inline typename arena_allocator_impl<traits>::size_type arena_allocator_impl<tra
 }
 
 template <typename traits>
-inline void arena_allocator_impl<traits>::copy(block& dst, block const& src)
+inline void arena_allocator_impl<traits>::copy(block const& src, block& dst)
 {
   dst.data      = src.data;
   dst.alignment = src.alignment;
