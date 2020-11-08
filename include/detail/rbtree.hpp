@@ -54,35 +54,36 @@ private:
     return Accessor::is_set(node);
   }
 
-  static inline std::uint32_t set_parent(container& cont, std::uint32_t node, std::uint32_t parent)
+  static inline void set_parent(container& cont, std::uint32_t node, std::uint32_t parent)
   {
     tree_node& lnk_ref = Accessor::links(Accessor::node(cont, node));
     lnk_ref.parent     = parent;
   }
 
-  static inline std::uint32_t unset_flag(node_type& node_ref)
+  static inline void unset_flag(node_type& node_ref)
   {
     Accessor::unset_flag(node_ref);
   }
 
-  static inline std::uint32_t set_flag(node_type& node_ref)
+  static inline void set_flag(node_type& node_ref)
   {
     Accessor::set_flag(node_ref);
   }
 
-  struct node_it
+  template <typename Container>
+  struct tnode_it
   {
-    void set()
+    void set() requires(!std::is_const_v<Container>)
     {
       Accessor::set_flag(*ref);
     }
 
-    void set(bool b)
+    void set(bool b) requires(!std::is_const_v<Container>)
     {
       Accessor::set_flag(*ref, b);
     }
 
-    void unset()
+    void unset() requires(!std::is_const_v<Container>)
     {
       Accessor::unset_flag(*ref);
     }
@@ -92,34 +93,34 @@ private:
       return Accessor::is_set(*ref);
     }
 
-    void set_parent(std::uint32_t par)
+    void set_parent(std::uint32_t par) requires(!std::is_const_v<Container>)
     {
       Accessor::links(*ref).parent = par;
     }
 
-    void set_left(std::uint32_t left)
+    void set_left(std::uint32_t left) requires(!std::is_const_v<Container>)
     {
       Accessor::links(*ref).left = left;
     }
 
-    void set_right(std::uint32_t right)
+    void set_right(std::uint32_t right) requires(!std::is_const_v<Container>)
     {
       Accessor::links(*ref).right = right;
     }
 
-    node_it parent(container& icont) const
+    tnode_it parent(Container& icont) const
     {
-      return node_it(icont, Accessor::links(*ref).parent);
+      return tnode_it(icont, Accessor::links(*ref).parent);
     }
 
-    node_it left(container& icont) const
+    tnode_it left(Container& icont) const
     {
-      return node_it(icont, Accessor::links(*ref).left);
+      return tnode_it(icont, Accessor::links(*ref).left);
     }
 
-    node_it right(container& icont) const
+    tnode_it right(Container& icont) const
     {
-      return node_it(icont, Accessor::links(*ref).right);
+      return tnode_it(icont, Accessor::links(*ref).right);
     }
 
     std::uint32_t parent() const
@@ -147,35 +148,59 @@ private:
       return Accessor::value(*ref);
     }
 
-    node_it(container& icont, std::uint32_t inode) : node(inode), ref(&Accessor::node(icont, inode)) {}
-    node_it(std::uint32_t inode, node_type* iref) : node(inode), ref(iref) {}
-    node_it()               = default;
-    node_it(node_it const&) = default;
-    node_it(node_it&&)      = default;
-    node_it& operator=(node_it const&) = default;
-    node_it& operator=(node_it&&) = default;
+    using node_t = std::conditional_t<std::is_const_v<Container>, node_type const, node_type>;
 
-    bool operator==(node_it const& iother) const
+    tnode_it(Container& icont, std::uint32_t inode) : node(inode), ref(nullptr)
+    {
+      if (inode != k_null_32)
+        ref = &Accessor::node(icont, inode);
+    }
+
+    tnode_it(std::uint32_t inode, node_t* iref) : node(inode), ref(iref) {}
+    tnode_it()                = default;
+    tnode_it(tnode_it const&) = default;
+    tnode_it(tnode_it&&)      = default;
+    tnode_it& operator=(tnode_it const&) = default;
+    tnode_it& operator=(tnode_it&&) = default;
+
+    bool operator==(tnode_it const& iother) const
     {
       return node == iother.index();
     }
-    bool operator!=(node_it const& iother) const
+    bool operator!=(tnode_it const& iother) const
     {
       return node != iother.index();
     }
 
     std::uint32_t node = detail::k_null_32;
-    node_type*    ref  = nullptr;
+    node_t*       ref  = nullptr;
   };
 
-  inline node_it minimum(container& icont, node_it u)
+  using node_it  = tnode_it<container>;
+  using cnode_it = tnode_it<container const>;
+
+  inline cnode_it minimum(container const& icont, cnode_it u) const
   {
     while (u.left() != k_null_32)
       u = u.left(icont);
     return u;
   }
 
-  inline node_it maximum(container& icont, node_it u)
+  inline cnode_it maximum(container const& icont, cnode_it u) const
+  {
+    while (u.right() != k_null_32)
+      u = u.right(icont);
+    return u;
+  }
+
+  inline node_it minimum(container& icont, node_it u) const
+  {
+    while (u.left() != k_null_32)
+      u = u.left(icont);
+    return u;
+  }
+
+  inline node_it maximum(container& icont, node_it u) const
   {
     while (u.right() != k_null_32)
       u = u.right(icont);
@@ -220,7 +245,7 @@ private:
   {
     auto parent = u.parent(icont);
     if (parent.index() == k_null_32)
-      root = v;
+      root = v.index();
     else if (parent.left() == u.index())
       parent.set_left(v.index());
     else
@@ -281,7 +306,7 @@ private:
           right_rotate(cont, parent_of_parent);
         }
       }
-      if (node == root)
+      if (node.index() == root)
         break;
     }
     unset_flag(Accessor::node(cont, root));
@@ -292,7 +317,7 @@ private:
     node_it s;
     while (x.index() != root && !x.is_set())
     {
-      auto parent = x.parent(cont);
+      auto parent = x.parent(icont);
       if (x.index() == parent.left())
       {
         s = parent.right(icont);
@@ -300,8 +325,8 @@ private:
         {
           s.unset();
           parent.set();
-          left_rotate(cont, parent);
-          s = x.parent(cont).right(icont);
+          left_rotate(icont, parent);
+          s = x.parent(icont).right(icont);
         }
 
         auto s_left  = s.left(icont);
@@ -318,10 +343,10 @@ private:
             s_left.unset();
             s.set();
             right_rotate(icont, s);
-            s = x.parent(cont).right(icont);
+            s = x.parent(icont).right(icont);
           }
 
-          parent = x.parent(cont);
+          parent = x.parent(icont);
           s.set(parent.is_set());
           parent.unset();
           s_right.unset();
@@ -336,8 +361,8 @@ private:
         {
           s.unset();
           parent.set();
-          right_rotate(cont, parent);
-          s = x.parent(cont).left(icont);
+          right_rotate(icont, parent);
+          s = x.parent(icont).left(icont);
         }
 
         auto s_left  = s.left(icont);
@@ -354,10 +379,10 @@ private:
             s_right.unset();
             s.set();
             left_rotate(icont, s);
-            s = x.parent(cont).left(icont);
+            s = x.parent(icont).left(icont);
           }
 
-          parent = x.parent(cont);
+          parent = x.parent(icont);
           s.set(parent.is_set());
           parent.unset();
           s_left.unset();
@@ -370,17 +395,17 @@ private:
   }
 
 public:
-  value_type minimum(container& icont) const
+  value_type minimum(container const& icont) const
   {
-    return root == k_null_32 ? value_type() : minimum(icont, node_it(icont, root)).value();
+    return root == k_null_32 ? value_type() : minimum(icont, cnode_it(icont, root)).value();
   }
 
-  value_type maximum(container& icont) const
+  value_type maximum(container const& icont) const
   {
-    return root == k_null_32 ? value_type() : maximum(icont, node_it(icont, root)).value();
+    return root == k_null_32 ? value_type() : maximum(icont, cnode_it(icont, root)).value();
   }
 
-  std::uint32_t find(container& icont, std::uint32_t iroot, value_type ivalue) const
+  std::uint32_t find(container const& icont, std::uint32_t iroot, value_type ivalue) const
   {
     std::uint32_t node = iroot;
     while (node != k_null_32)
@@ -440,28 +465,27 @@ public:
 
   void insert(container& cont, std::uint32_t inode)
   {
-    std::uint32_t parent     = k_null_32;
-    std::uint32_t it         = root;
-    auto          node_value = Accessor::value(cont, inode);
-
+    std::uint32_t parent = k_null_32;
+    std::uint32_t it     = root;
+    node_it       node(cont, inode);
     while (it != k_null_32)
     {
-      parent = it;
-      if (node_value < Accessor::value(cont, it))
-        it = Accessor::links(Accessor::node(cont, it)).left;
+      parent   = it;
+      auto& nr = Accessor::node(cont, it);
+      if (node.value() < Accessor::value(nr))
+        it = Accessor::links(nr).left;
       else
-        it = Accessor::links(Accessor::node(cont, it)).right;
+        it = Accessor::links(nr).right;
     }
 
-    tree_node& node_ref = Accessor::links(Accessor::node(cont, inode));
-    set_parent(node_ref, parent);
+    node.set_parent(parent);
     if (parent == k_null_32)
     {
       root = inode;
-      unset_flag(node_ref);
+      node.unset();
       return;
     }
-    else if (node_value < Accessor::value(Accessor::node(cont, parent)))
+    else if (node.value() < Accessor::value(Accessor::node(cont, parent)))
       Accessor::links(Accessor::node(cont, parent)).left = inode;
     else
       Accessor::links(Accessor::node(cont, parent)).right = inode;
@@ -469,7 +493,7 @@ public:
     if (Accessor::links(Accessor::node(cont, parent)).parent == k_null_32)
       return;
 
-    insert_fixup(cont, node_it(inode, &node_ref));
+    insert_fixup(cont, node);
   }
 
   void erase(container& icont, std::uint32_t inode)
@@ -501,12 +525,12 @@ public:
       {
         transplant(icont, ynode, xnode);
         ynode.set_right(node.right());
-        node.right(icont).set_parent(ynode);
+        node.right(icont).set_parent(ynode.index());
       }
 
       transplant(icont, node, ynode);
       ynode.set_left(node.left());
-      ynode.left(icont).set_parent(ynode);
+      ynode.left(icont).set_parent(ynode.index());
       ynode.set(node.is_set());
     }
     node.set_left(k_null_32);
@@ -517,7 +541,7 @@ public:
   }
 
   template <typename L>
-  void in_order_traversal(container& blocks, std::uint32_t node, L&& visitor)
+  void in_order_traversal(container const& blocks, std::uint32_t node, L&& visitor) const
   {
     if (node != k_null_32)
     {
@@ -533,28 +557,46 @@ public:
     in_order_traversal(blocks, root, std::forward<L>(visitor));
   }
 
-  std::uint32_t node_count(container& blocks) const
+  template <typename L>
+  void in_order_traversal(container& blocks, std::uint32_t node, L&& visitor)
+  {
+    if (node != k_null_32)
+    {
+      auto& n = Accessor::node(blocks, node);
+      in_order_traversal(blocks, Accessor::links(n).left, std::forward<L>(visitor));
+      visitor(Accessor::node(blocks, node));
+      in_order_traversal(blocks, Accessor::links(n).right, std::forward<L>(visitor));
+    }
+  }
+
+  template <typename L>
+  void in_order_traversal(container const& blocks, L&& visitor) const
+  {
+    in_order_traversal(blocks, root, std::forward<L>(visitor));
+  }
+
+  std::uint32_t node_count(container const& blocks) const
   {
     std::uint32_t cnt = 0;
-    in_order_traversal(blocks, [&cnt](node_type&) {
+    in_order_traversal(blocks, [&cnt](node_type const&) {
       cnt++;
     });
     return cnt;
   }
 
-  void validate_integrity(container& blocks) const
+  void validate_integrity(container const& blocks) const
   {
     if (root == k_null_32)
       return;
     value_type last = minimum(blocks);
-    in_order_traversal(blocks, [&last](node_type& n) {
+    in_order_traversal(blocks, [&last](node_type const& n) {
       assert(last <= Accessor::value(n));
       last = Accessor::value(n);
     });
   }
 
 private:
-  std::uint32_t root = k_null_i32;
+  std::uint32_t root = k_null_32;
 };
 
 } // namespace cppalloc::detail

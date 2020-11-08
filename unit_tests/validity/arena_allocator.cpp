@@ -1,25 +1,36 @@
 #include <catch2/catch.hpp>
 #include <cppalloc.hpp>
+#include <unordered_set>
 
 struct alloc_mem_manager
 {
-  using arena_data_t = std::vector<std::uint8_t>;
+  using arena_data_t = std::vector<char>;
   using alloc_info   = cppalloc::alloc_info<std::size_t>;
   struct allocation
   {
     alloc_info  info;
-    std::size_t size  = 0;
-    bool        freed = false;
+    std::size_t size = 0;
+    allocation()     = default;
+    allocation(alloc_info const& iinfo, std::size_t isize) : info(iinfo), size(isize) {}
   };
-  std::vector<arena_data_t> arenas;
-  std::vector<arena_data_t> backup_arenas;
-  std::vector<allocation>   allocs;
-  std::vector<allocation>   backup_allocs;
+  std::vector<arena_data_t>      arenas;
+  std::vector<arena_data_t>      backup_arenas;
+  std::vector<allocation>        allocs;
+  std::vector<allocation>        backup_allocs;
+  std::vector<cppalloc::uhandle> valids;
 
   bool drop_arena([[maybe_unused]] cppalloc::uhandle id)
   {
     arenas[id].clear();
     return true;
+  }
+
+  void fill(allocation const& l)
+  {
+    std::minstd_rand                   gen;
+    std::uniform_int_distribution<int> generator(65, 122);
+    for (std::size_t s = 0; s < l.size; ++s)
+      arenas[l.info.harena][s + l.info.offset] = static_cast<char>(generator(gen));
   }
 
   cppalloc::uhandle add_arena([[maybe_unused]] cppalloc::ihandle id, [[maybe_unused]] std::size_t size)
@@ -56,7 +67,6 @@ struct alloc_mem_manager
 
   void rebind_alloc([[maybe_unused]] cppalloc::uhandle halloc, alloc_info info)
   {
-    assert(allocs[halloc].freed == false);
     allocs[halloc].info = info;
   }
 
@@ -69,4 +79,40 @@ struct alloc_mem_manager
   }
 };
 
-TEST_CASE("Validate arena_allocator", "[arena_allocator]") {}
+TEST_CASE("Validate arena_allocator", "[arena_allocator.best_fit_tree]")
+{
+  using allocator_t =
+      cppalloc::arena_allocator<alloc_mem_manager, std::size_t, cppalloc::alloc_strategy::best_fit_tree, true>;
+  std::minstd_rand                           gen;
+  std::bernoulli_distribution                dice(0.7);
+  std::uniform_int_distribution<std::size_t> generator(1, 1000);
+  std::uniform_int_distribution<std::size_t> generator2(1, 4);
+  enum action
+  {
+    e_allocate,
+    e_deallocate
+  };
+  alloc_mem_manager mgr;
+  allocator_t       allocator(920, mgr);
+  for (std::uint32_t allocs = 0; allocs < 10000; ++allocs)
+  {
+    if (dice(gen) || mgr.allocs.size() == 0)
+    {
+      cppalloc::alloc_desc<std::size_t> desc(generator(gen), 1u << generator2(gen),
+                                             static_cast<cppalloc::uhandle>(mgr.allocs.size()),
+                                             cppalloc::alloc_option_bits::f_defrag);
+      mgr.allocs.emplace_back(allocator.allocate(desc), desc.size());
+      mgr.fill(mgr.allocs.back());
+      mgr.valids.push_back(desc.huser());
+    }
+    else
+    {
+      std::uniform_int_distribution<std::size_t> choose(0, mgr.valids.size());
+      std::size_t                                chosen = choose(gen);
+      auto                                       handle = mgr.valids[chosen];
+      allocator.deallocate(handle);
+      mgr.valids.erase(mgr.valids.begin() + chosen);
+    }
+    allocator.validate_integrity();
+  }
+}

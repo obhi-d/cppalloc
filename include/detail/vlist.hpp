@@ -154,12 +154,12 @@ public:
 
   inline iterator begin(container& cont)
   {
-    return iterator(*this, first);
+    return iterator(cont, first);
   }
 
   inline iterator end(container& cont)
   {
-    return iterator(*this);
+    return iterator(cont);
   }
 
   inline std::uint32_t front() const
@@ -261,7 +261,7 @@ public:
       first = l_next.next;
 
     if (l_next.next != k_null_32)
-      Accessor::node(cont, next).prev = l_node.prev;
+      Accessor::node(cont, l_next.next).prev = l_node.prev;
     else
       last = l_node.prev;
 

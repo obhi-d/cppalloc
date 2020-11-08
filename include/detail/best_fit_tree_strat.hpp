@@ -46,11 +46,11 @@ public:
     {
       return inode.ext;
     }
-    static inline tree_node& links(node_type&)
+    static inline tree_node& links(node_type& inode)
     {
       return inode.ext;
     }
-    static inline size_type value(node_type const& inode)
+    static inline size_type const& value(node_type const& inode)
     {
       return inode.size;
     }
@@ -62,11 +62,11 @@ public:
     {
       inode.is_flagged = true;
     }
-    static inline void set_flag(node_type&, bool v)
+    static inline void set_flag(node_type& inode, bool v)
     {
       inode.is_flagged = v;
     }
-    static inline bool unset_flag(node_type& v)
+    static inline void unset_flag(node_type& inode)
     {
       inode.is_flagged = false;
     }
@@ -102,8 +102,8 @@ public:
     tree.erase(bank.blocks, found);
     if (remaining > 0)
     {
-      auto& list   = bank.arenas[blk.arena].blocks;
-      auto  newblk = bank.blocks.emplace(blk.offset + i_size, remaining, blk.arena, detail::k_null_sz<uhandle>, true);
+      auto& list   = bank.arenas[blk.arena].block_order;
+      auto  newblk = bank.blocks.emplace(blk.offset + size, remaining, blk.arena, detail::k_null_sz<uhandle>, true);
       list.insert_after(bank.blocks, found, newblk);
       tree.insert(bank.blocks, newblk);
     }
@@ -113,7 +113,7 @@ public:
 
   inline void add_free_arena([[maybe_unused]] block_bank& blocks, std::uint32_t block)
   {
-    tree.insert(blocks, newblk);
+    tree.insert(blocks, block);
   }
   inline void add_free(block_bank& blocks, std::uint32_t block)
   {
@@ -138,21 +138,21 @@ public:
     tree.erase(blocks, node);
   }
 
-  inline std::uint32_t total_free_nodes(block_bank& blocks) const
+  inline std::uint32_t total_free_nodes(block_bank const& blocks) const
   {
     return tree.node_count(blocks);
   }
 
-  inline size_type total_free_size(block_bank& blocks) const
+  inline size_type total_free_size(block_bank const& blocks) const
   {
     size_type sz = 0;
-    tree.in_order_traversal(blocks, [&last](block& n) {
+    tree.in_order_traversal(blocks, [&sz](block const& n) {
       sz += n.size;
     });
     return sz;
   }
 
-  void validate_integrity(block_bank& blocks)
+  void validate_integrity(block_bank const& blocks)
   {
     tree.validate_integrity(blocks);
   }

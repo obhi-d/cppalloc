@@ -8,10 +8,11 @@ namespace cppalloc::detail
 template <typename T>
 class table
 {
+public:
   template <typename... Args>
   std::uint32_t emplace(Args&&... args)
   {
-    std::uint32_t index;
+    std::uint32_t index = 0;
     if (unused != k_null_32)
     {
       index  = unused;
@@ -23,6 +24,7 @@ class table
       pool.resize(index + 1);
     }
     new (&pool[index]) T(std::forward<Args>(args)...);
+    return index;
   }
 
   void erase(std::uint32_t index)
@@ -40,9 +42,10 @@ class table
 
   T const& operator[](std::uint32_t i) const
   {
-    return reinterpret_cast<T&>(pool[i]);
+    return reinterpret_cast<T const&>(pool[i]);
   }
 
+private:
   using storage = std::aligned_storage_t<sizeof(T), alignof(T)>;
   std::vector<storage> pool;
   std::uint32_t        unused = k_null_32;

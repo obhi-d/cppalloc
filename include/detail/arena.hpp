@@ -29,7 +29,7 @@ using arena_bank = detail::table<detail::arena<traits>>;
 template <typename traits>
 struct arena_accessor
 {
-  using value_type = block<traits>;
+  using value_type = arena<traits>;
   using bank_type  = arena_bank<traits>;
   using size_type  = typename traits::size_type;
   using container  = bank_type;

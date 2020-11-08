@@ -26,13 +26,16 @@
 #endif
 
 #if defined(_MSC_VER)
+#include <intrin.h>
 #define CPPALLOC_EXPORT      __declspec(dllexport)
 #define CPPALLOC_IMPORT      __declspec(dllimport)
 #define CPPALLOC_EMPTY_BASES __declspec(empty_bases)
+#define CPPALLOC_POPCOUNT(v) __popcnt(v)
 #else
 #define CPPALLOC_EXPORT __attribute__((visibility("default")))
 #define CPPALLOC_IMPORT __attribute__((visibility("default")))
 #define CPPALLOC_EMPTY_BASES
+#define CPPALLOC_POPCOUNT(v) __builtin_popcount(v);
 #endif
 
 #ifdef CPPALLOC_DLL_IMPL

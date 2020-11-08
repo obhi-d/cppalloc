@@ -62,16 +62,19 @@ class alloc_desc
 {
 public:
   alloc_desc(size_type isize) : size_(isize) {}
-  alloc_desc(size_type isize, size_type ialignment) : alloc_desc(isize), alignment_(ialignment - 1) {}
-  alloc_desc(size_type isize, size_type ialignment, uhandle ihuser) : alloc_desc(isize, ialignment), huser_(ihuser) {}
+  alloc_desc(size_type isize, size_type ialignment) : size_(isize), alignment_mask_(ialignment - 1) {}
+  alloc_desc(size_type isize, size_type ialignment, uhandle ihuser)
+      : size_(isize), alignment_mask_(ialignment - 1), huser_(ihuser)
+  {
+  }
   alloc_desc(size_type isize, size_type ialignment, uhandle ihuser, alloc_options iflags)
-      : alloc_desc(isize, ialignment, ihuser), flags_(iflags)
+      : size_(isize), alignment_mask_(ialignment - 1), huser_(ihuser), flags_(iflags)
   {
   }
 
   size_type size() const
   {
-    return size;
+    return size_;
   }
 
   size_type alignment_mask() const
@@ -115,7 +118,7 @@ struct alloc_info
   size_type offset = detail::k_null_sz<size_type>;
   ihandle   halloc = detail::k_null_32;
   alloc_info()     = default;
-  alloc_info(uhandle iharena, size_type ioffset, ihandle ihalloc) : harena(iharena), offset(ioffset), ihalloc(halloc) {}
+  alloc_info(uhandle iharena, size_type ioffset, ihandle ihalloc) : harena(iharena), offset(ioffset), halloc(ihalloc) {}
 };
 
 } // namespace cppalloc
