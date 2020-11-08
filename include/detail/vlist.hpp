@@ -182,6 +182,26 @@ public:
     last                            = node;
   }
 
+  inline void insert_after(container& cont, std::uint32_t loc, std::uint32_t node)
+  {
+    assert(loc != k_null_32);
+    auto& l_node = Accessor::node(cont, node);
+    auto& l_loc  = Accessor::node(cont, loc);
+
+    if (l_loc.next != k_null_32)
+    {
+      Accessor::node(cont, l_loc.next).prev = node;
+      l_node.next                           = l_loc.next;
+    }
+    else
+    {
+      last = node;
+      assert(l_node.next == k_null_32);
+    }
+    l_node.prev = loc;
+    l_loc.next  = node;
+  }
+
   inline void insert(container& cont, std::uint32_t loc, std::uint32_t node)
   {
     // end?
@@ -201,8 +221,8 @@ public:
       }
       else
       {
-        first       = node;
-        l_node.prev = k_null_32;
+        first = node;
+        assert(l_node.prev == k_null_32);
       }
 
       l_loc.prev  = node;
