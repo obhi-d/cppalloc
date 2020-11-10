@@ -89,5 +89,11 @@ struct bank_data
   arena_list<traits>                  arena_order;
   detail::alloc_strategy_type<traits> strat;
   typename traits::size_type          free_size = 0;
+
+  bank_data()
+  {
+    // blocks 0 is sentinel
+    blocks.emplace();
+  }
 };
 } // namespace cppalloc::detail

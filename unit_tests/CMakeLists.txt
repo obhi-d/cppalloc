@@ -18,10 +18,10 @@ ExternalProject_Add(Catch2
 ## Basic tests
 macro(validity_test test_name definitions compile_flags link_options)
   add_executable(cppalloc-unit-test-validity-${test_name} 
-    "validity/best_fit_allocator.cpp"
-    "validity/linear_allocator.cpp"
+##    "validity/best_fit_allocator.cpp"
+##    "validity/linear_allocator.cpp"
     "validity/main.cpp"
-    "validity/pool_allocator.cpp"
+##    "validity/pool_allocator.cpp"
      "validity/arena_allocator.cpp")
   target_link_libraries(cppalloc-unit-test-validity-${test_name} cppalloc)
   add_test(validity-${test_name} cppalloc-unit-test-validity-${test_name})

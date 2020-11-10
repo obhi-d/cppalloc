@@ -265,7 +265,7 @@ inline std::pair<ihandle, ihandle> arena_allocator_impl<traits>::add_arena(bank_
   block_ref.offset        = 0;
   block_ref.arena         = arena_id;
   block_ref.data          = ihandle;
-
+  block_ref.size          = iarena_size;
   if (iempty)
   {
     block_ref.is_free = true;
@@ -278,6 +278,7 @@ inline std::pair<ihandle, ihandle> arena_allocator_impl<traits>::add_arena(bank_
     arena_ref.free = 0;
   }
   arena_ref.block_order.push_back(ibank.blocks, block_id);
+  ibank.arena_order.push_back(ibank.arenas, arena_id);
   return std::make_pair(arena_id, block_id);
 }
 

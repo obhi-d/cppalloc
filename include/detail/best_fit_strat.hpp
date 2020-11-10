@@ -92,7 +92,7 @@ inline std::uint32_t alloc_strategy_impl<alloc_strategy::best_fit, traits>::comm
   blk.is_free = false;
 
   auto remaining = blk.size - size;
-
+  blk.size       = size;
   if (remaining > 0)
   {
     auto& list   = bank.arenas[blk.arena].blocks;

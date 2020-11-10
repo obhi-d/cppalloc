@@ -76,17 +76,19 @@ public:
 
   inline std::uint32_t try_allocate(bank_data& bank, size_type size)
   {
-    return tree.lower_bound(bank.blocks, size);
+    auto blk = tree.lower_bound(bank.blocks, size);
+    return blk == 0 ? k_null_32 : blk;
   }
 
   inline std::uint32_t try_allocate(bank_data& bank, size_type size, std::uint32_t from)
   {
-    return tree.lower_bound(bank.blocks, tree.next_more(bank.blocks, from), size);
+    auto blk = tree.lower_bound(bank.blocks, tree.next_more(bank.blocks, from), size);
+    return blk == 0 ? k_null_32 : blk;
   }
 
   inline std::uint32_t commit(bank_data& bank, size_type size, std::uint32_t found)
   {
-    if (found == k_null_32)
+    if (!found || found == k_null_32)
     {
       return k_null_32;
     }
@@ -100,6 +102,7 @@ public:
 
     auto remaining = blk.size - size;
     tree.erase(bank.blocks, found);
+    blk.size = size;
     if (remaining > 0)
     {
       auto& list   = bank.arenas[blk.arena].block_order;

@@ -110,7 +110,8 @@ TEST_CASE("Validate arena_allocator", "[arena_allocator.best_fit_tree]")
       std::uniform_int_distribution<std::size_t> choose(0, mgr.valids.size());
       std::size_t                                chosen = choose(gen);
       auto                                       handle = mgr.valids[chosen];
-      allocator.deallocate(handle);
+      allocator.deallocate(mgr.allocs[handle].info.halloc);
+      mgr.allocs[handle].size = 0;
       mgr.valids.erase(mgr.valids.begin() + chosen);
     }
     allocator.validate_integrity();
