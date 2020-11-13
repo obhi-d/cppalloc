@@ -40,6 +40,7 @@ struct memory_manager_adapter
   void begin_defragment() {}
   void end_defragment() {}
 
+  void remove_arena(cppalloc::uhandle h) {}
   void move_memory([[maybe_unused]] uhandle src_arena, [[maybe_unused]] uhandle dst_arena,
                    [[maybe_unused]] size_type from, [[maybe_unused]] size_type to, size_type size)
   {
@@ -94,7 +95,8 @@ public:
 
   size_type adjusted_size() const
   {
-    return size() + alignment_mask();
+    // 1 extra byte for better merges
+    return size() + alignment_mask() + 1;
   }
 
 private:

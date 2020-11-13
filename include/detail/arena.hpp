@@ -18,8 +18,8 @@ struct arena
 
   block_list<traits> block_order;
   detail::list_node  order;
-  size_type          size;
-  size_type          free;
+  size_type          size = 0;
+  size_type          free = 0;
   uhandle            data = detail::k_null_sz<uhandle>;
 };
 

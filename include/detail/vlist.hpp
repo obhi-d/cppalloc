@@ -125,6 +125,11 @@ public:
       return index;
     }
 
+    inline operator bool() const
+    {
+      return index != k_null_32;
+    }
+
     ContainerTy&  owner;
     std::uint32_t index = k_null_32;
   };
@@ -170,6 +175,11 @@ public:
   inline std::uint32_t back() const
   {
     return last;
+  }
+
+  inline std::uint32_t next(container const& cont, std::uint32_t node) const
+  {
+    return Accessor::node(cont, node).next;
   }
 
   inline void push_back(container& cont, std::uint32_t node)
@@ -230,30 +240,34 @@ public:
     }
   }
 
-  inline void unlink(container& cont, std::uint32_t node)
+  // retunrs the next
+  inline std::uint32_t unlink(container& cont, std::uint32_t node)
   {
-    auto& l_node = Accessor::node(cont, node);
+    auto&         l_node = Accessor::node(cont, node);
+    std::uint32_t next   = l_node.next;
 
     if (l_node.prev != k_null_32)
       Accessor::node(cont, l_node.prev).next = l_node.next;
     else
       first = l_node.next;
 
-    if (l_node.next != k_null_32)
-      Accessor::node(cont, l_node.next).prev = l_node.prev;
+    if (next != k_null_32)
+      Accessor::node(cont, next).prev = l_node.prev;
     else
       last = l_node.prev;
 
     l_node.prev = k_null_32;
     l_node.next = k_null_32;
+    return next;
   }
 
   // special method to unlink two consequetive nodes
   // assumes current node's next is valid
-  inline void unlink2(container& cont, std::uint32_t node)
+  inline std::uint32_t unlink2(container& cont, std::uint32_t node)
   {
-    auto& l_node = Accessor::node(cont, node);
-    auto& l_next = Accessor::node(cont, l_node.next);
+    auto&         l_node = Accessor::node(cont, node);
+    auto&         l_next = Accessor::node(cont, l_node.next);
+    std::uint32_t next   = l_next.next;
 
     if (l_node.prev != k_null_32)
       Accessor::node(cont, l_node.prev).next = l_next.next;
@@ -269,20 +283,30 @@ public:
     l_next.prev = k_null_32;
     l_node.prev = k_null_32;
     l_node.next = k_null_32;
+    return next;
   }
 
-  inline void erase(container& cont, std::uint32_t node)
+  inline iterator erase(iterator node)
   {
-    unlink(cont, node);
-    cont.erase(node);
+    auto r = unlink(node.owner, node.index);
+    node.owner.erase(node);
+    return iterator(node.owner, r);
   }
 
-  inline void erase2(container& cont, std::uint32_t node)
+  inline std::uint32_t erase(container& cont, std::uint32_t node)
+  {
+    auto r = unlink(cont, node);
+    cont.erase(node);
+    return r;
+  }
+
+  inline std::uint32_t erase2(container& cont, std::uint32_t node)
   {
     auto next = Accessor::node(cont, node).next;
-    unlink2(cont, node);
+    auto r    = unlink2(cont, node);
     cont.erase(node);
     cont.erase(next);
+    return r;
   }
 
   inline void clear(container& cont)

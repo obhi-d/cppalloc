@@ -27,15 +27,21 @@
 
 #if defined(_MSC_VER)
 #include <intrin.h>
-#define CPPALLOC_EXPORT      __declspec(dllexport)
-#define CPPALLOC_IMPORT      __declspec(dllimport)
-#define CPPALLOC_EMPTY_BASES __declspec(empty_bases)
-#define CPPALLOC_POPCOUNT(v) __popcnt(v)
+#define CPPALLOC_EXPORT              __declspec(dllexport)
+#define CPPALLOC_IMPORT              __declspec(dllimport)
+#define CPPALLOC_EMPTY_BASES         __declspec(empty_bases)
+#define CPPALLOC_POPCOUNT(v)         __popcnt(v)
+#define CPPALLOC_PREFETCH_ONETIME(x) _mm_prefetch((const char*)(x), _MM_HINT_T0)
+#define CPPALLOC_LIKELY(x)           (x)
+#define CPPALLOC_UNLIKELY(x)         (x)
 #else
 #define CPPALLOC_EXPORT __attribute__((visibility("default")))
 #define CPPALLOC_IMPORT __attribute__((visibility("default")))
 #define CPPALLOC_EMPTY_BASES
-#define CPPALLOC_POPCOUNT(v) __builtin_popcount(v);
+#define CPPALLOC_POPCOUNT(v)         __builtin_popcount(v);
+#define CPPALLOC_PREFETCH_ONETIME(x) __builtin_prefetch((x))
+#define CPPALLOC_LIKELY(x)           __builtin_expect((x), 1)
+#define CPPALLOC_UNLIKELY(x)         __builtin_expect((x), 0)
 #endif
 
 #ifdef CPPALLOC_DLL_IMPL
@@ -46,6 +52,10 @@
 #endif
 #else
 #define CPPALLOC_API
+#endif
+
+#if _DEBUG
+#define CPPALLOC_VALIDITY_CHECKS
 #endif
 
 #ifndef CPPALLOC_PRINT_DEBUG
@@ -83,9 +93,18 @@ inline void print_debug_info(std::string const& s)
   std::cout << s;
 }
 
-template <typename tag, bool k_compute_stats = false, typename base_t = std::monostate, bool k_print = true>
+struct stats_base
+{
+  static std::string print()
+  {
+    return std::string();
+  }
+};
+
+template <typename tag, bool k_compute_stats = false, typename base_t = stats_base, bool k_print = true>
 struct statistics : public base_t
 {
+  using stats_base_t = stats_base;
   template <typename... Args>
   statistics(Args&&... i_args) : base_t(std::forward<Args>(i_args)...)
   {
@@ -122,7 +141,7 @@ struct timer_t
       start = std::chrono::high_resolution_clock::now();
     }
     scoped(scoped const&) = delete;
-    scoped(scoped&& other) : timer(other.timer), start(other.start)
+    scoped(scoped&& other) noexcept : timer(other.timer), start(other.start)
     {
       other.timer = nullptr;
     }
@@ -182,9 +201,18 @@ struct statistics<tag_arg, true, base_arg, k_print> : public base_arg
   {
     if (k_print && !stats_printed)
     {
+      std::string line(79, '=');
+      std::string line2(79, '-');
+      line2 += "\n";
+      line += "\n";
       std::stringstream ss;
-      ss << "Stats for: " << cppalloc::type_name<tag_arg>() << "\n"
-         << "Arenas allocated: " << arenas_allocated.load() << "\n"
+      ss << "Stats for: " << cppalloc::type_name<tag_arg>() << "\n";
+      ss << line;
+      std::string base_stats = base_arg::print();
+      if (!base_stats.empty())
+        ss << "Allocator specific stats\n" << line2 << base_arg::print() << "\n" << line2;
+
+      ss << "Arenas allocated: " << arenas_allocated.load() << "\n"
          << "Peak allocation: " << peak_allocation.load() << "\n"
          << "Final allocation: " << allocation.load() << "\n"
          << "Total allocation call: " << allocation_count.load() << "\n"
@@ -196,7 +224,7 @@ struct statistics<tag_arg, true, base_arg, k_print> : public base_arg
       if (deallocation_count > 0)
         ss << "Avg deallocation time: " << deallocation_timing.elapsed_time_count() / deallocation_count.load()
            << " us\n";
-
+      ss << line;
       CPPALLOC_PRINT_DEBUG(ss.str());
       stats_printed = true;
     }

@@ -62,7 +62,7 @@ template <typename traits>
 inline free_list::iterator alloc_strategy_impl<alloc_strategy::best_fit, traits>::try_allocate(bank_data& bank,
                                                                                                size_type  size)
 {
-  if (free_ordering.size() == 0 || bank.blocks[free_ordering.back()] < size)
+  if (free_ordering.size() == 0 || bank.blocks[free_ordering.back()].size < size)
     return free_ordering.end();
   return find_free(bank.blocks, free_ordering.begin(), free_ordering.end(), size);
 }
@@ -95,8 +95,9 @@ inline std::uint32_t alloc_strategy_impl<alloc_strategy::best_fit, traits>::comm
   blk.size       = size;
   if (remaining > 0)
   {
-    auto& list   = bank.arenas[blk.arena].blocks;
-    auto  newblk = bank.blocks.emplace(blk.offset + i_size, remaining, blk.arena, detail::k_null_sz<uhandle>, true);
+    auto& list   = bank.arenas[blk.arena].block_order;
+    auto  arena  = blk.arena;
+    auto  newblk = bank.blocks.emplace(blk.offset + size, remaining, arena, detail::k_null_sz<uhandle>, true);
     list.insert_after(bank.blocks, free_node, newblk);
     // reinsert the left-over size in free list
     reinsert_left(bank.blocks, found, newblk);
@@ -170,7 +171,7 @@ inline bool alloc_strategy_impl<alloc_strategy::best_fit, traits>::is_valid(free
 template <typename traits>
 inline void alloc_strategy_impl<alloc_strategy::best_fit, traits>::erase(block_bank& blocks, std::uint32_t node)
 {
-  auto it = find_free(blocks, loc, free_ordering.end(), blocks[node].size);
+  auto it = find_free(blocks, free_ordering.begin(), free_ordering.end(), blocks[node].size);
   while (it != free_ordering.end() && *it != node)
     it++;
   assert(it != free_ordering.end());
@@ -224,8 +225,13 @@ inline free_list::iterator alloc_strategy_impl<alloc_strategy::best_fit, traits>
                                                                                                 free_list::iterator of,
                                                                                                 std::uint32_t node)
 {
-  auto begin = free_list.begin();
-  auto it    = find_free(blocks, begin, of, node);
+  auto begin_it = free_ordering.begin();
+  if (begin_it == of)
+  {
+    *of = node;
+    return of;
+  }
+  auto it = find_free(blocks, begin_it, of, blocks[node].size);
   if (it != of)
   {
     std::uint32_t* src   = &*it;
@@ -237,7 +243,7 @@ inline free_list::iterator alloc_strategy_impl<alloc_strategy::best_fit, traits>
   }
   else
   {
-    *it = node;
+    *of = node;
     return it;
   }
 }
@@ -248,22 +254,27 @@ inline free_list::iterator alloc_strategy_impl<alloc_strategy::best_fit, traits>
                                                                                                  std::uint32_t node)
 {
 
-  auto end  = free_ordering.end();
-  auto next = std::next(of);
-  auto it   = find_free(blocks, next, end, node);
+  auto end_it = free_ordering.end();
+  auto next   = std::next(of);
+  if (next == end_it)
+  {
+    *of = node;
+    return of;
+  }
+  auto it = find_free(blocks, next, end_it, blocks[node].size);
   if (it != next)
   {
-    std::uint32_t* dest  = &*node;
+    std::uint32_t* dest  = &(*of);
     std::uint32_t* src   = dest + 1;
     size_t         count = std::distance(next, it);
     std::memmove(dest, src, count * sizeof(std::uint32_t));
     auto ptr = (dest + count);
     *ptr     = node;
-    return free_list.begin() + std::distance(free_list.data(), ptr);
+    return free_ordering.begin() + std::distance(free_ordering.data(), ptr);
   }
   else
   {
-    *it = node;
+    *of = node;
     return it;
   }
 }

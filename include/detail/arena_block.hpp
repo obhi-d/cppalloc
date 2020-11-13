@@ -18,7 +18,7 @@ struct block
   using extension = typename traits::extension;
 
   size_type         offset      = detail::k_null_sz<size_type>;
-  size_type         size        = detail::k_null_sz<size_type>;
+  size_type         size        = 0;
   uhandle           data        = detail::k_null_sz<uhandle>;
   std::uint32_t     arena       = detail::k_null_32;
   detail::list_node arena_order = detail::list_node();
@@ -36,6 +36,24 @@ struct block
   block(size_type ioffset, size_type isize, std::uint32_t iarena, uhandle idata, bool ifree)
       : offset(ioffset), size(isize), arena(iarena), data(idata), is_free(ifree)
   {
+  }
+
+  inline std::pair<size_type, size_type> adjusted_block() const
+  {
+    size_type alignment_mask = (1u << alignment) - 1u;
+    return std::make_pair<size_type>((offset + alignment_mask) & ~alignment_mask, size - alignment_mask);
+  }
+
+  inline size_type adjusted_size() const
+  {
+    size_type alignment_mask = (1u << alignment) - 1u;
+    return size - alignment_mask;
+  }
+
+  inline size_type adjusted_offset() const
+  {
+    size_type alignment_mask = (1u << alignment) - 1u;
+    return (offset + alignment_mask) & ~alignment_mask;
   }
 };
 

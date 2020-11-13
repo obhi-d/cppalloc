@@ -24,6 +24,7 @@ public:
       pool.resize(index + 1);
     }
     new (&pool[index]) T(std::forward<Args>(args)...);
+    valids++;
     return index;
   }
 
@@ -33,6 +34,7 @@ public:
     t.~T();
     reinterpret_cast<std::uint32_t&>(pool[index]) = unused;
     unused                                        = index;
+    valids--;
   }
 
   T& operator[](std::uint32_t i)
@@ -45,10 +47,20 @@ public:
     return reinterpret_cast<T const&>(pool[i]);
   }
 
+  std::uint32_t size() const
+  {
+    return valids;
+  }
+
 private:
+#ifdef CPPALLOC_VALIDITY_CHECKS
+  using storage = T;
+#else
   using storage = std::aligned_storage_t<sizeof(T), alignof(T)>;
+#endif
   std::vector<storage> pool;
   std::uint32_t        unused = k_null_32;
+  std::uint32_t        valids = 0;
 };
 
 } // namespace cppalloc::detail

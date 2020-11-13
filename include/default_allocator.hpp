@@ -30,6 +30,10 @@ struct default_alloc_statistics
   {
     return 0;
   }
+  inline static std::string print()
+  {
+    return std::string();
+  }
 };
 
 #ifndef CPPALLOC_NO_STATS
@@ -50,6 +54,10 @@ struct default_alloc_statistics<true>
   inline static detail::statistics<default_allocator_tag, true>& get_instance()
   {
     return default_allocator_statistics_instance;
+  }
+  inline static std::string print()
+  {
+    return std::string();
   }
 };
 

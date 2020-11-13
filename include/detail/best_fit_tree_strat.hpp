@@ -77,13 +77,13 @@ public:
   inline std::uint32_t try_allocate(bank_data& bank, size_type size)
   {
     auto blk = tree.lower_bound(bank.blocks, size);
-    return blk == 0 ? k_null_32 : blk;
+    return ((blk == 0) || (bank.blocks[blk].size < size)) ? k_null_32 : blk;
   }
 
   inline std::uint32_t try_allocate(bank_data& bank, size_type size, std::uint32_t from)
   {
     auto blk = tree.lower_bound(bank.blocks, tree.next_more(bank.blocks, from), size);
-    return blk == 0 ? k_null_32 : blk;
+    return blk == 0 || bank.blocks[blk].size < size ? k_null_32 : blk;
   }
 
   inline std::uint32_t commit(bank_data& bank, size_type size, std::uint32_t found)
@@ -106,7 +106,8 @@ public:
     if (remaining > 0)
     {
       auto& list   = bank.arenas[blk.arena].block_order;
-      auto  newblk = bank.blocks.emplace(blk.offset + size, remaining, blk.arena, detail::k_null_sz<uhandle>, true);
+      auto  arena  = blk.arena;
+      auto  newblk = bank.blocks.emplace(blk.offset + size, remaining, arena, detail::k_null_sz<uhandle>, true);
       list.insert_after(bank.blocks, found, newblk);
       tree.insert(bank.blocks, newblk);
     }
@@ -124,9 +125,9 @@ public:
   }
   inline void replace(block_bank& blocks, std::uint32_t block, std::uint32_t new_block, size_type new_size)
   {
-    tree.erase(blocks, block);
     blocks[new_block].size = new_size;
-    tree.insert(blocks, new_block);
+    tree.insert_hint(blocks, block, new_block);
+    tree.erase(blocks, block);
   }
   inline std::uint32_t node(std::uint32_t it)
   {
