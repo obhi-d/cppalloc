@@ -1,4 +1,5 @@
 
+#pragma once
 #include "arena_allocator.hpp"
 #include "default_allocator.hpp"
 #include "linear_allocator.hpp"
