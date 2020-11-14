@@ -1,5 +1,6 @@
 #include <catch2/catch.hpp>
 #include <cppalloc.hpp>
+#include <iostream>
 #include <unordered_set>
 
 struct alloc_mem_manager
@@ -86,7 +87,7 @@ struct alloc_mem_manager
   {
     assert(arenas[dst_arena].size() >= to + size);
     assert(arenas[src_arena].size() >= from + size);
-    std::memcpy(arenas[dst_arena].data() + to, arenas[src_arena].data() + from, size);
+    std::memmove(arenas[dst_arena].data() + to, arenas[src_arena].data() + from, size);
   }
 };
 
@@ -107,7 +108,7 @@ TEST_CASE("Validate arena_allocator.best_fit_tree", "[arena_allocator.best_fit_t
   allocator_t       allocator(920, mgr);
   for (std::uint32_t allocs = 0; allocs < 10000; ++allocs)
   {
-    if (dice(gen) || mgr.allocs.size() == 0)
+    if (dice(gen) || mgr.valids.size() == 0)
     {
       cppalloc::alloc_desc<std::size_t> desc(generator(gen), 1u << generator2(gen),
                                              static_cast<cppalloc::uhandle>(mgr.allocs.size()),
@@ -149,7 +150,7 @@ TEST_CASE("Validate arena_allocator.best_fit", "[arena_allocator.best_fit]")
   allocator_t       allocator(920, mgr);
   for (std::uint32_t allocs = 0; allocs < 10000; ++allocs)
   {
-    if (dice(gen) || mgr.allocs.size() == 0)
+    if (dice(gen) || mgr.valids.size() == 0)
     {
       cppalloc::alloc_desc<std::size_t> desc(generator(gen), 1u << generator2(gen),
                                              static_cast<cppalloc::uhandle>(mgr.allocs.size()),

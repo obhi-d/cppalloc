@@ -38,7 +38,7 @@
 #define CPPALLOC_EXPORT __attribute__((visibility("default")))
 #define CPPALLOC_IMPORT __attribute__((visibility("default")))
 #define CPPALLOC_EMPTY_BASES
-#define CPPALLOC_POPCOUNT(v)         __builtin_popcount(v);
+#define CPPALLOC_POPCOUNT(v)         __builtin_popcount(v)
 #define CPPALLOC_PREFETCH_ONETIME(x) __builtin_prefetch((x))
 #define CPPALLOC_LIKELY(x)           __builtin_expect((x), 1)
 #define CPPALLOC_UNLIKELY(x)         __builtin_expect((x), 0)

@@ -8,7 +8,7 @@ TEST_CASE("Validate general_allocator", "[general_allocator]")
   using namespace cppalloc;
   using allocator_t = default_allocator<std::uint32_t, 0, true, false>;
 
-  allocator_t::address data = allocator_t::allocate(32, 128);
+  allocator_t::address data = allocator_t::allocate(256, 128);
   CHECK((reinterpret_cast<std::uintptr_t>(data) & 127) == 0);
-  allocator_t::deallocate(data, 32, 1000);
+  allocator_t::deallocate(data, 256, 128);
 }

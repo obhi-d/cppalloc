@@ -23,7 +23,7 @@ TEST_CASE("Validate linear_allocator", "[linear_allocator]")
 TEST_CASE("Validate linear_arena_allocator without alignment", "[linear_arena_allocator]")
 {
   using namespace cppalloc;
-  using allocator_t = linear_arena_allocator<default_allocator<std::uint32_t, 128, true>, true>;
+  using allocator_t = linear_arena_allocator<default_allocator<std::uint32_t, 8, true>, true>;
   struct record
   {
     void*         data;
