@@ -2,6 +2,7 @@
 #pragma once
 
 #include <memory>
+#include <memory_resource>
 
 namespace cppalloc
 {
@@ -48,13 +49,25 @@ public:
 
   inline pointer allocate(size_type cnt, const_pointer = 0) const
   {
-    pointer ret = reinterpret_cast<pointer>(impl_->allocate(static_cast<underlying_size_t>(sizeof(T) * cnt)));
-    return ret;
+    if constexpr (alignof(T) > alignof(void*))
+    {
+      pointer ret =
+          reinterpret_cast<pointer>(impl_->allocate(static_cast<underlying_size_t>(sizeof(T) * cnt), alignof(T)));
+      return ret;
+    }
+    else
+    {
+      pointer ret = reinterpret_cast<pointer>(impl_->allocate(static_cast<underlying_size_t>(sizeof(T) * cnt)));
+      return ret;
+    }
   }
 
   inline void deallocate(pointer p, size_type cnt) const
   {
-    impl_->deallocate(p, static_cast<underlying_size_t>(sizeof(T) * cnt));
+    if constexpr (alignof(T) > alignof(void*))
+      impl_->deallocate(p, static_cast<underlying_size_t>(sizeof(T) * cnt), alignof(T));
+    else
+      impl_->deallocate(p, static_cast<underlying_size_t>(sizeof(T) * cnt));
   }
   //    construction/destruction
 
@@ -129,14 +142,26 @@ public:
 
   inline pointer allocate(size_type cnt, const_pointer = 0) const
   {
-    pointer ret =
-        reinterpret_cast<pointer>(underlying_allocator::allocate(static_cast<underlying_size_t>(sizeof(T) * cnt)));
-    return ret;
+    if constexpr (alignof(T) > alignof(void*))
+    {
+      pointer ret = reinterpret_cast<pointer>(
+          underlying_allocator::allocate(static_cast<underlying_size_t>(sizeof(T) * cnt), alignof(T)));
+      return ret;
+    }
+    else
+    {
+      pointer ret =
+          reinterpret_cast<pointer>(underlying_allocator::allocate(static_cast<underlying_size_t>(sizeof(T) * cnt)));
+      return ret;
+    }
   }
 
   inline void deallocate(pointer p, size_type cnt) const
   {
-    underlying_allocator::deallocate(p, static_cast<underlying_size_t>(sizeof(T) * cnt));
+    if constexpr (alignof(T) > alignof(void*))
+      underlying_allocator::deallocate(p, static_cast<underlying_size_t>(sizeof(T) * cnt), alignof(T));
+    else
+      underlying_allocator::deallocate(p, static_cast<underlying_size_t>(sizeof(T) * cnt));
   }
   //    construction/destruction
 
@@ -184,6 +209,36 @@ public:
   inline std_allocator_wrapper(Args&&... args) : base_type(std::forward<Args>(args)...)
   {
   }
+};
+
+template <typename underlying_allocator>
+class std_memory_resource : std::pmr::memory_resource
+{
+public:
+  std_memory_resource(underlying_allocator* impl) : impl_(impl) {}
+
+  /// \thread_safe
+  inline void* do_allocate(std::size_t bytes, std::size_t alignment) override
+  {
+    return impl_->allocate(bytes, alignment);
+  }
+  /// \thread_safe
+  inline void do_deallocate(void* ptr, std::size_t bytes, std::size_t alignment) override
+  {
+    return impl_->deallocate(ptr, bytes, alignment);
+  }
+  /// \thread_safe
+  inline bool do_is_equal(const memory_resource& other) const noexcept override
+  {
+    // TODO
+    auto pother = dynamic_cast<std_memory_resource<underlying_allocator> const*>(&other);
+    if (!pother || pother->impl_ != impl_)
+      return false;
+    return true;
+  }
+
+private:
+  underlying_allocator* impl_;
 };
 
 } // namespace cppalloc

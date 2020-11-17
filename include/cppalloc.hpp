@@ -4,6 +4,7 @@
 #include "default_allocator.hpp"
 #include "linear_allocator.hpp"
 #include "linear_arena_allocator.hpp"
+#include "linear_stack_allocator.hpp"
 #include "pool_allocator.hpp"
 #include "std_allocator_wrapper.hpp"
 #include "std_short_alloc.hpp"
