@@ -102,7 +102,7 @@ TEST_CASE("Validate linear_stack_allocator with alignment", "[linear_stack_alloc
   constexpr std::uint32_t k_arena_size = 1;
   allocator_t             allocator(64);
 
-  auto r1 = allocator.get_rewind_marker();
+  auto r1 = allocator.get_rewind_point();
   auto a1  = cppalloc::allocate<std::uint8_t*>(allocator, 32, 0);
   allocator.rewind(r1);
   auto a2 = cppalloc::allocate<std::uint8_t*>(allocator, 32, 0);
@@ -111,13 +111,13 @@ TEST_CASE("Validate linear_stack_allocator with alignment", "[linear_stack_alloc
   a1  = cppalloc::allocate<std::uint8_t*>(allocator, 32, 0);
   a2  = cppalloc::allocate<std::uint8_t*>(allocator, 32, 0);
   auto a3  = cppalloc::allocate<std::uint8_t*>(allocator, 16, 0);
-  auto r2 = allocator.get_rewind_marker();
+  auto r2 = allocator.get_rewind_point();
   auto a4  = cppalloc::allocate<std::uint8_t*>(allocator, 32, 0);
   auto a6  = cppalloc::allocate<std::uint8_t*>(allocator, 32, 0);
   allocator.rewind(r2);
   auto a7  = cppalloc::allocate<std::uint8_t*>(allocator, 32, 0);
   CHECK(a4 == a7);
-  auto r3 = allocator.get_rewind_marker();
+  auto r3 = allocator.get_rewind_point();
   a7  = cppalloc::allocate<std::uint8_t*>(allocator, 2, 0);
   auto a8  = cppalloc::allocate<std::uint8_t*>(allocator, 128, 0);
   auto a9  = cppalloc::allocate<std::uint8_t*>(allocator, 32, 0);

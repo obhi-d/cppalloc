@@ -26,10 +26,19 @@ public:
     k_minimum_size = static_cast<size_type>(64)
   };
 
-  struct rewind_marker
+  struct rewind_point
   {
     size_type arena;
     size_type left_over;
+  };
+
+  struct scoped_rewind
+  {
+    scoped_rewind(linear_stack_allocator<underlying_allocator, k_compute_stats>& r) : ref(r), marker(r.get_rewind_marker()) { }
+    ~scoped_rewind() { ref.rewind(marker); }
+    
+    rewind_point marker;
+    linear_stack_allocator<underlying_allocator, k_compute_stats>& ref;
   };
 
   template <typename... Args>
@@ -51,10 +60,15 @@ public:
   {
     return underlying_allocator::null();
   }
-
-  rewind_marker get_rewind_marker() const
+  
+  scoped_rewind get_auto_rewind_point() 
   {
-    rewind_marker m;
+    return scoped_rewind(*this);
+  }
+
+  rewind_point get_rewind_point() const
+  {
+    rewind_point m;
     m.arena = current_arena;
     if (current_arena < arenas.size())
       m.left_over = arenas[current_arena].left_over;
@@ -146,7 +160,7 @@ public:
     return static_cast<std::uint32_t>(arenas.size());
   }
 
-  inline void rewind(rewind_marker marker)
+  inline void rewind(rewind_point marker)
   {
     current_arena = marker.arena;
     if (current_arena < arenas.size())
