@@ -212,7 +212,7 @@ public:
 };
 
 template <typename underlying_allocator>
-class std_memory_resource : std::pmr::memory_resource
+class std_memory_resource : public std::pmr::memory_resource
 {
 public:
   std_memory_resource(underlying_allocator* impl) : impl_(impl) {}
