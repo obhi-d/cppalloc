@@ -56,7 +56,8 @@ private:
 #ifdef CPPALLOC_VALIDITY_CHECKS
   using storage = T;
 #else
-  using storage = std::aligned_storage_t<sizeof(T), alignof(T)>;
+  // Note: Alignment is controlled by the allocator.
+  using storage = std::aligned_storage_t<sizeof(T)>;
 #endif
   std::vector<storage> pool;
   std::uint32_t        unused = k_null_32;
