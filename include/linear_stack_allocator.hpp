@@ -34,7 +34,7 @@ public:
 
   struct scoped_rewind
   {
-    scoped_rewind(linear_stack_allocator<underlying_allocator, k_compute_stats>& r) : ref(r), marker(r.get_rewind_marker()) { }
+    scoped_rewind(linear_stack_allocator<underlying_allocator, k_compute_stats>& r) : ref(r), marker(r.get_rewind_point()) { }
     ~scoped_rewind() { ref.rewind(marker); }
     
     rewind_point marker;
