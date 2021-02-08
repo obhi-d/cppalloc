@@ -9,11 +9,11 @@ namespace cppalloc
 namespace detail
 {
 
-template <typename T, typename underlying_allocator, bool static_ua>
+template <typename T, typename UA, bool static_ua>
 struct std_allocator_wrapper;
 
-template <typename T, typename underlying_allocator>
-class std_allocator_wrapper<T, underlying_allocator, false> : public std::allocator<T>
+template <typename T, typename UA>
+class std_allocator_wrapper<T, UA, false> : public std::allocator<T>
 {
 public:
   //    typedefs
@@ -22,7 +22,7 @@ public:
   using size_type     = typename std::allocator_traits<std::allocator<T>>::size_type;
   using value_type    = typename std::allocator_traits<std::allocator<T>>::value_type;
 
-  using underlying_size_t = typename underlying_allocator::size_type;
+  using underlying_size_t = typename UA::size_type;
 
 public:
   //    convert an allocator<T> to allocator<U>
@@ -30,17 +30,17 @@ public:
   template <typename U>
   struct rebind
   {
-    typedef std_allocator_wrapper<U, underlying_allocator, false> other;
+    typedef std_allocator_wrapper<U, UA, false> other;
   };
 
 public:
-  inline explicit std_allocator_wrapper(underlying_allocator& impl) : impl_(&impl) {}
+  inline explicit std_allocator_wrapper(UA& impl) : impl_(&impl) {}
 
   inline ~std_allocator_wrapper() {}
 
   /*	inline explicit std_allocator_wrapper(std_allocator_wrapper const&) {}*/
   template <typename U>
-  inline std_allocator_wrapper(std_allocator_wrapper<U, underlying_allocator, false> const& other)
+  inline std_allocator_wrapper(std_allocator_wrapper<U, UA, false> const& other)
       : impl_(other.get_impl())
   {
   }
@@ -90,17 +90,17 @@ public:
     return impl_ != x.impl_;
   }
 
-  underlying_allocator* get_impl() const
+  UA* get_impl() const
   {
     return impl_;
   }
 
 protected:
-  underlying_allocator* impl_;
+  UA* impl_;
 };
 
-template <typename T, typename underlying_allocator>
-class std_allocator_wrapper<T, underlying_allocator, true> : public std::allocator<T>, public underlying_allocator
+template <typename T, typename UA>
+class std_allocator_wrapper<T, UA, true> : public std::allocator<T>, public UA
 {
 public:
   //    typedefs
@@ -109,7 +109,7 @@ public:
   using size_type     = typename std::allocator_traits<std::allocator<T>>::size_type;
   using value_type    = typename std::allocator_traits<std::allocator<T>>::value_type;
 
-  using underlying_size_t = typename underlying_allocator::size_type;
+  using underlying_size_t = typename UA::size_type;
 
 public:
   //    convert an allocator<T> to allocator<U>
@@ -117,15 +117,15 @@ public:
   template <typename U>
   struct rebind
   {
-    typedef std_allocator_wrapper<U, underlying_allocator, true> other;
+    typedef std_allocator_wrapper<U, UA, true> other;
   };
 
 public:
   inline std_allocator_wrapper() {}
 
-  inline explicit std_allocator_wrapper(underlying_allocator const& impl) : underlying_allocator(impl) {}
-  inline std_allocator_wrapper(std_allocator_wrapper<T, underlying_allocator, true> const& impl)
-      : underlying_allocator((underlying_allocator const&)impl)
+  inline explicit std_allocator_wrapper(UA const& impl) : UA(impl) {}
+  inline std_allocator_wrapper(std_allocator_wrapper<T, UA, true> const& impl)
+      : UA((UA const&)impl)
   {
   }
 
@@ -133,8 +133,8 @@ public:
 
   /*	inline explicit std_allocator_wrapper(std_allocator_wrapper const&) {}*/
   template <typename U>
-  inline std_allocator_wrapper(std_allocator_wrapper<U, underlying_allocator, true> const& other)
-      : underlying_allocator((underlying_allocator&)other)
+  inline std_allocator_wrapper(std_allocator_wrapper<U, UA, true> const& other)
+      : UA((UA&)other)
   {
   }
 
@@ -145,13 +145,13 @@ public:
     if constexpr (alignof(T) > alignof(void*))
     {
       pointer ret = reinterpret_cast<pointer>(
-          underlying_allocator::allocate(static_cast<underlying_size_t>(sizeof(T) * cnt), alignof(T)));
+          UA::allocate(static_cast<underlying_size_t>(sizeof(T) * cnt), alignof(T)));
       return ret;
     }
     else
     {
       pointer ret =
-          reinterpret_cast<pointer>(underlying_allocator::allocate(static_cast<underlying_size_t>(sizeof(T) * cnt)));
+          reinterpret_cast<pointer>(UA::allocate(static_cast<underlying_size_t>(sizeof(T) * cnt)));
       return ret;
     }
   }
@@ -159,9 +159,9 @@ public:
   inline void deallocate(pointer p, size_type cnt) const
   {
     if constexpr (alignof(T) > alignof(void*))
-      underlying_allocator::deallocate(p, static_cast<underlying_size_t>(sizeof(T) * cnt), alignof(T));
+      UA::deallocate(p, static_cast<underlying_size_t>(sizeof(T) * cnt), alignof(T));
     else
-      underlying_allocator::deallocate(p, static_cast<underlying_size_t>(sizeof(T) * cnt));
+      UA::deallocate(p, static_cast<underlying_size_t>(sizeof(T) * cnt));
   }
   //    construction/destruction
 
@@ -187,21 +187,21 @@ public:
 
 } // namespace detail
 
-template <typename T, typename underlying_allocator>
+template <typename T, typename UA>
 class std_allocator_wrapper
-    : public detail::std_allocator_wrapper<T, underlying_allocator,
-                                           traits::is_static_v<traits::tag_t<underlying_allocator>>>
+    : public detail::std_allocator_wrapper<T, UA,
+                                           traits::is_static_v<traits::tag_t<UA>>>
 {
 public:
   //    typedefs
   using base_type =
-      detail::std_allocator_wrapper<T, underlying_allocator, traits::is_static_v<traits::tag_t<underlying_allocator>>>;
+      detail::std_allocator_wrapper<T, UA, traits::is_static_v<traits::tag_t<UA>>>;
   using pointer       = typename std::allocator_traits<std::allocator<T>>::pointer;
   using const_pointer = typename std::allocator_traits<std::allocator<T>>::const_pointer;
   using size_type     = typename std::allocator_traits<std::allocator<T>>::size_type;
   using value_type    = typename std::allocator_traits<std::allocator<T>>::value_type;
 
-  using underlying_size_t = typename underlying_allocator::size_type;
+  using underlying_size_t = typename UA::size_type;
 
   std_allocator_wrapper() = default;
 
@@ -211,11 +211,23 @@ public:
   }
 };
 
-template <typename underlying_allocator>
+template <typename T, typename UA>
+auto make_std_allocator(UA& impl)
+{
+  return std_allocator_wrapper<T, UA>(impl);
+}
+
+template <typename T, typename UA>
+auto make_std_allocator()
+{
+  return std_allocator_wrapper<T, UA>();
+}
+
+template <typename UA>
 class std_memory_resource : public std::pmr::memory_resource
 {
 public:
-  std_memory_resource(underlying_allocator* impl) : impl_(impl) {}
+  std_memory_resource(UA* impl) : impl_(impl) {}
 
   /// \thread_safe
   inline void* do_allocate(std::size_t bytes, std::size_t alignment) override
@@ -231,14 +243,14 @@ public:
   inline bool do_is_equal(const memory_resource& other) const noexcept override
   {
     // TODO
-    auto pother = dynamic_cast<std_memory_resource<underlying_allocator> const*>(&other);
+    auto pother = dynamic_cast<std_memory_resource<UA> const*>(&other);
     if (!pother || pother->impl_ != impl_)
       return false;
     return true;
   }
 
 private:
-  underlying_allocator* impl_;
+  UA* impl_;
 };
 
 } // namespace cppalloc

@@ -2,6 +2,7 @@
 // Created by obhi on 11/17/20.
 //
 #pragma once
+#include <limits>
 #include <linear_allocator.hpp>
 
 namespace cppalloc
@@ -34,10 +35,22 @@ public:
 
   struct scoped_rewind
   {
-    scoped_rewind(linear_stack_allocator<underlying_allocator, k_compute_stats>& r) : ref(r), marker(r.get_rewind_point()) { }
-    ~scoped_rewind() { ref.rewind(marker); }
-    
-    rewind_point marker;
+    scoped_rewind(scoped_rewind const&) = delete;
+    scoped_rewind(scoped_rewind&& mv) : marker(mv.marker), ref(mv.ref)
+    {
+      mv.marker.arena = std::numeric_limits<size_type>::max();
+    }
+    scoped_rewind(linear_stack_allocator<underlying_allocator, k_compute_stats>& r)
+        : ref(r), marker(r.get_rewind_point())
+    {
+    }
+    ~scoped_rewind()
+    {
+      if (marker.arena != std::numeric_limits<size_type>::max())
+        ref.rewind(marker);
+    }
+
+    rewind_point                                                   marker;
     linear_stack_allocator<underlying_allocator, k_compute_stats>& ref;
   };
 
@@ -60,8 +73,8 @@ public:
   {
     return underlying_allocator::null();
   }
-  
-  scoped_rewind get_auto_rewind_point() 
+
+  scoped_rewind get_auto_rewind_point()
   {
     return scoped_rewind(*this);
   }
@@ -166,7 +179,7 @@ public:
     if (current_arena < arenas.size())
       arenas[current_arena].left_over = std::min(marker.left_over, arenas[current_arena].arena_size);
     size_type end = static_cast<size_type>(arenas.size());
-    for(size_type i = marker.arena + 1; i < end; ++i)
+    for (size_type i = marker.arena + 1; i < end; ++i)
       arenas[i].reset();
   }
 
@@ -211,7 +224,7 @@ private:
   }
 
   std::vector<arena> arenas;
-  size_type current_arena = 0;
+  size_type          current_arena = 0;
 
   const size_type k_arena_size;
 
